@@ -14,7 +14,7 @@
     --bg-raised-2: #241A2B;
     --ink: #F4EEE8;
     --ink-dim: #B9AEC2;
-    --ink-faint: #7C7189;
+    --ink-faint: #B9AEC2;
     --luz: #FF3E7E;       /* fucsia — versión de Luz */
     --luz-soft: #FF88B4;
     --paco: #4FC3F7;      /* celeste — versión de Paco */
@@ -105,6 +105,7 @@
     color:var(--ink-faint); transition: color .18s ease, transform .18s ease;
   }
   .nav-list a:hover, .nav-list a:focus-visible, .nav-list a.active{ color:var(--ink); }
+  .nav-list a:hover, .nav-list a:focus-visible{ text-decoration:underline; text-underline-offset:.25em; text-decoration-thickness:1px; }
 
   .topbar-right{
     display:flex; flex-flow:row wrap; align-items:flex-start;
@@ -114,7 +115,7 @@
     font-size:.72rem; font-weight:800; letter-spacing:.14em; text-transform:uppercase;
     color:var(--ink); transition: color .18s ease;
   }
-  a.toptag:hover, a.toptag:focus-visible, a.toptag.active{ color:var(--luz); }
+  a.toptag:hover, a.toptag:focus-visible, a.toptag.active{ color:var(--ink); text-decoration:underline; text-underline-offset:.25em; text-decoration-thickness:1px; }
 
   /* ---------- HOME (fixed, no scroll) ---------- */
   #view-home{
@@ -261,6 +262,7 @@
   .btn-dossier:not([aria-disabled="true"]):hover,
   .btn-dossier:not([aria-disabled="true"]):focus-visible{
     border-color:var(--luz); color:var(--luz);
+    text-decoration:underline; text-underline-offset:.25em; text-decoration-thickness:1px;
   }
   .btn-dossier[aria-disabled="true"]{ opacity:.5; cursor:not-allowed; pointer-events:none; }
 
@@ -307,7 +309,7 @@
   @media (max-width:640px){ .direction-grid{ grid-template-columns:1fr; } }
   .contact-list{ margin-top:1.5rem; display:flex; flex-direction:column; gap:.6rem; }
   .contact-list a, .contact-list span{ font-size:.92rem; color:var(--ink-dim); }
-  .contact-list a:hover{ color:var(--ink); }
+  .contact-list a:hover, .contact-list a:focus-visible{ color:var(--ink); text-decoration:underline; text-underline-offset:.25em; text-decoration-thickness:1px; }
 
   /* Contacto page only: bigger, white contact info (scoped so Dirección's
      shared .contact-list is untouched). */
@@ -315,7 +317,7 @@
   #view-contacto .contact-list a{
     font-size:clamp(1.15rem, 2.2vw, 1.55rem); font-weight:500; color:var(--ink);
   }
-  #view-contacto .contact-list a:hover{ color:var(--paco-soft); }
+  #view-contacto .contact-list a:hover, #view-contacto .contact-list a:focus-visible{ color:var(--paco-soft); }
   .contact-row{ display:flex; align-items:baseline; flex-wrap:wrap; gap:.9rem 1.1rem; }
   .btn-copy{
     -webkit-appearance:none; appearance:none; background:none; cursor:pointer;
@@ -337,7 +339,7 @@
   .funcion-card .venue{ margin-top:1rem; color:var(--ink-dim); font-size:.95rem; }
   .funcion-card .address{ margin-top:.5rem; font-size:.82rem; letter-spacing:.02em; }
   .funcion-card .address a{ color:var(--ink-faint); }
-  .funcion-card .address a:hover, .funcion-card .address a:focus-visible{ color:var(--ink); }
+  .funcion-card .address a:hover, .funcion-card .address a:focus-visible{ color:var(--ink); text-decoration:underline; text-underline-offset:.25em; text-decoration-thickness:1px; }
 
   footer.page-foot{
     max-width:1100px; margin:0 auto; margin-top:auto; padding: 1.5rem clamp(1.25rem,6vw,3rem) clamp(2.5rem,6vh,3.5rem);
