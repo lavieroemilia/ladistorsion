@@ -63,6 +63,7 @@
      bigger and white, unlike the small field labels inside dl.ficha. */
   .section > .label{
     font-size: clamp(.9rem, 1.7vw, 1.1rem);
+    letter-spacing:.08em;
     color: var(--ink);
   }
 
@@ -299,7 +300,19 @@
   .card.tone-luz .role{ color:var(--luz-soft); }
   .card.tone-paco .role{ color:var(--paco-soft); }
   .card.tone-neutral .role{ color:var(--ink-faint); }
-  .card p.bio{ margin-top:.75rem; color:var(--ink-dim); font-size:.92rem; line-height:1.65; }
+  .card .bio{ margin-top:.75rem; color:var(--ink-dim); font-size:.92rem; line-height:1.65; }
+  .bio p + p{ margin-top:.8rem; }
+
+  /* Trayectoria: project titles stacked one per line, in white, so a
+     reader can scan the credits at a glance (dossier-style). */
+  .credits{ margin-top:1.4rem; }
+  .credits + .credits{ margin-top:1.1rem; }
+  .credits .label{ margin-bottom:.35rem; letter-spacing:.08em; }
+  .credits ul{ list-style:none; margin:0; padding:0; }
+  .credits li{ padding:.2rem 0; font-size:.92rem; line-height:1.45; }
+  .credits .t{ color:var(--ink); font-weight:400; font-style:normal; }
+  .credits .d{ color:var(--ink-dim); font-size:.82rem; }
+  .credits .t + .d::before{ content:" — "; }
   .card .links{ margin-top:.75rem; display:flex; gap:1rem; flex-wrap:wrap; }
   .card .links a{ font-size:.78rem; font-weight:600; border-bottom:1px solid var(--line-strong); padding-bottom:.1rem; }
   .card .links a:hover{ color:var(--ink); border-color:var(--ink); }
@@ -486,7 +499,25 @@
           </div>
           <h3>Natalia Peralta</h3>
           <p class="role">Interpreta a Luz</p>
-          <p class="bio">Actriz y profesora de interpretación nacida en Buenos Aires. Licenciada en Artes Dramáticas por la Universidad Nacional de las Artes, se formó desde los diez años en la escuela de Hugo Midón y, más tarde, con Luciano Suardi, Valentina Banegas, Lisandro Rodríguez y Carolina Adamovsky. Reside en Madrid, donde entrena con Pablo Messiez, Lorena Bayonas, Alfonso Albacete y Clara Méndez Leite, y estudia canto con Laura Neira y dramaturgia con Mariana Mazover. Participó en el largometraje <em>Solo se vive una vez</em>, en <em>La curva de Sarapistón</em> y <em>Ramona</em>, en la serie <em>Máxima</em> y en la obra <em>Las piedras</em>, de Agustina Muñoz.</p>
+          <div class="bio">
+            <p>Actriz y profesora de interpretación nacida en Buenos Aires. Licenciada en Artes Dramáticas por la Universidad Nacional de las Artes, se formó desde los diez años en la escuela de Hugo Midón y, más tarde, con Luciano Suardi, Valentina Banegas, Lisandro Rodríguez y Carolina Adamovsky.</p>
+            <p>Reside en Madrid, donde entrena con Pablo Messiez, Lorena Bayonas, Alfonso Albacete y Clara Méndez Leite, y estudia canto con Laura Neira y dramaturgia con Mariana Mazover.</p>
+          </div>
+          <div class="credits">
+            <p class="label">Cine y televisión</p>
+            <ul>
+              <li><em class="t">Solo se vive una vez</em> <span class="d">Largometraje</span></li>
+              <li><em class="t">Máxima</em> <span class="d">Serie</span></li>
+            </ul>
+          </div>
+          <div class="credits">
+            <p class="label">Teatro</p>
+            <ul>
+              <li><em class="t">La curva de Sarapistón</em></li>
+              <li><em class="t">Ramona</em></li>
+              <li><em class="t">Las piedras</em> <span class="d">De Agustina Muñoz</span></li>
+            </ul>
+          </div>
           <div class="links"><a href="https://instagram.com/nataliabperalta" target="_blank" rel="noopener">Instagram ↗</a></div>
         </article>
 
@@ -497,7 +528,29 @@
           </div>
           <h3>Jose Carpe</h3>
           <p class="role">Interpreta a Paco</p>
-          <p class="bio">Formado en la Escuela Superior de Arte Dramático de Sevilla, donde se licencia en Interpretación Textual, y completa su formación en Madrid en el Centro del Actor y en El Estudio. En cine y televisión participa en <em>Miss Dalí</em> (Ventura Pons) y <em>Amor no te llame amor</em>, y en series como <em>Cuatro estrellas</em>, <em>Mar de plástico</em> y <em>Centro médico</em>. En teatro forma parte de <em>En la nube</em> (Teatro Central de Sevilla), <em>Juana de Arco</em> de La Fura dels Baus (Teatro Real), <em>La vida breve</em> (Teatro Real / Teatro de la Zarzuela), <em>Werther</em> (Festspielhaus) y <em>El caballero de Olmedo</em> (Teatro Cervantes).</p>
+          <div class="bio">
+            <p>Formado en la Escuela Superior de Arte Dramático de Sevilla, donde se licencia en Interpretación Textual, y completa su formación en Madrid en el Centro del Actor y en El Estudio.</p>
+          </div>
+          <div class="credits">
+            <p class="label">Cine y televisión</p>
+            <ul>
+              <li><em class="t">Miss Dalí</em> <span class="d">Ventura Pons</span></li>
+              <li><em class="t">Amor no te llame amor</em></li>
+              <li><em class="t">Cuatro estrellas</em> <span class="d">Serie</span></li>
+              <li><em class="t">Mar de plástico</em> <span class="d">Serie</span></li>
+              <li><em class="t">Centro médico</em> <span class="d">Serie</span></li>
+            </ul>
+          </div>
+          <div class="credits">
+            <p class="label">Teatro</p>
+            <ul>
+              <li><em class="t">En la nube</em> <span class="d">Teatro Central de Sevilla</span></li>
+              <li><em class="t">Juana de Arco</em> <span class="d">La Fura dels Baus · Teatro Real</span></li>
+              <li><em class="t">La vida breve</em> <span class="d">Teatro Real / Teatro de la Zarzuela</span></li>
+              <li><em class="t">Werther</em> <span class="d">Festspielhaus</span></li>
+              <li><em class="t">El caballero de Olmedo</em> <span class="d">Teatro Cervantes</span></li>
+            </ul>
+          </div>
           <div class="links">
             <a href="https://josecarpe.com" target="_blank" rel="noopener">Sitio web ↗</a>
             <a href="https://instagram.com/josecarpe_" target="_blank" rel="noopener">Instagram ↗</a>
@@ -510,7 +563,10 @@
           </div>
           <h3>Leyre Julián Plaza</h3>
           <p class="role">Interpreta a la Dra. Matarazzo</p>
-          <p class="bio">Se forma de manera regular en el Estudio Corazza para el Actor y completa su entrenamiento con Lorena García de las Bayonas, Cristina Segovia y Rebeca Roldán en el Centro del Actor. Ha investigado el personaje a través del eneagrama, trabajado el espacio escénico con Jean-Guy Lecat y la técnica Linklater para la voz con Nuria Castaño, y completado su formación con canto, dramaturgia actoral con José Sanchís Sinisterra, coordinación de intimidad con Intimact, y danza clásica y flamenca.</p>
+          <div class="bio">
+            <p>Se forma de manera regular en el Estudio Corazza para el Actor y completa su entrenamiento con Lorena García de las Bayonas, Cristina Segovia y Rebeca Roldán en el Centro del Actor.</p>
+            <p>Ha investigado el personaje a través del eneagrama, trabajado el espacio escénico con Jean-Guy Lecat y la técnica Linklater para la voz con Nuria Castaño, y completado su formación con canto, dramaturgia actoral con José Sanchís Sinisterra, coordinación de intimidad con Intimact, y danza clásica y flamenca.</p>
+          </div>
           <div class="links"><a href="https://instagram.com/leyre.julian" target="_blank" rel="noopener">Instagram ↗</a></div>
         </article>
 
@@ -548,7 +604,17 @@
         <div>
           <h3 style="font-size:1.7rem;">Nacho Scorza</h3>
           <p class="role label" style="margin-top:.3rem;">Dirección</p>
-          <p class="bio prose" style="margin-top:1rem;">Profesional multidisciplinar con formación académica en Arquitectura por la UBA, y en Actuación y Dirección Escénica por la Universidad Nacional de las Artes de Buenos Aires. Completa su formación con cursos de Dirección de Casting en RTVE, Asistencia a la Producción Audiovisual en EIMA, Interiorismo y Escenografía en SEPHOR y Dramaturgia, entre otros. Acumula una amplia trayectoria en teatro, publicidad y cine, donde trabaja como actor, director, asistente de dirección, productor, escenógrafo, técnico y docente de interpretación. Su ópera prima, <em>Inimputables</em>, que escribe y dirige, y su proyecto personal <em>Todo Teatro</em> reflejan tanto su mirada creativa como su capacidad para liderar proyectos.</p>
+          <div class="bio prose" style="margin-top:1rem;">
+            <p>Profesional multidisciplinar con formación académica en Arquitectura por la UBA, y en Actuación y Dirección Escénica por la Universidad Nacional de las Artes de Buenos Aires. Completa su formación con cursos de Dirección de Casting en RTVE, Asistencia a la Producción Audiovisual en EIMA, Interiorismo y Escenografía en SEPHOR y Dramaturgia, entre otros.</p>
+            <p>Acumula una amplia trayectoria en teatro, publicidad y cine, donde trabaja como actor, director, asistente de dirección, productor, escenógrafo, técnico y docente de interpretación.</p>
+            <p>Su ópera prima y su proyecto personal reflejan tanto su mirada creativa como su capacidad para liderar proyectos.</p>
+          </div>
+          <div class="credits">
+            <ul>
+              <li><em class="t">Inimputables</em> <span class="d">Dramaturgia y dirección</span></li>
+              <li><em class="t">Todo Teatro</em> <span class="d">Clases de teatro en Madrid</span></li>
+            </ul>
+          </div>
 
           <div class="contact-list">
             <a href="mailto:nscorzig@gmail.com">nscorzig@gmail.com</a>
@@ -557,7 +623,7 @@
           </div>
 
           <div class="assist-note">
-            Asistencia de dirección: <strong>Emilia Laviero</strong>
+            Asistente de dirección: <strong>Emilia Laviero</strong>
           </div>
         </div>
       </div>
