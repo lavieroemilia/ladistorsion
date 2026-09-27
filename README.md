@@ -13,7 +13,7 @@ Página de una sola pieza (HTML/CSS/JS autocontenidos, sin dependencias de build
 
 ## Uso
 
-Es un único archivo `index.html` autocontenido: se puede abrir directo en el navegador o servir desde cualquier hosting estático (por ejemplo GitHub Pages, apuntando a la rama `main`).
+Es un único archivo `index.html` autocontenido: se puede abrir directo en el navegador. Se publica en Vercel (https://ladistorsion.vercel.app/): cada push a `main` despliega producción y cada rama genera un preview.
 
 ## Diseño
 
