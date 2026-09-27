@@ -174,7 +174,13 @@
     line-height:.86; letter-spacing:-0.015em; white-space:nowrap;
     text-align:center;
   }
-  .home-title h1 span{ color: var(--ink); }
+  .home-title h1 > span{ color: var(--ink); }
+  /* The title is written as four pieces: inline they read "LA DISTORSIÓN";
+     on phones (.is-stacked, set by the fit script from GLITCH_CONFIG) each
+     piece takes its own line — LA / DIS / TOR / SIÓN — so the title can be
+     much bigger. aria-label on the h1 keeps it one word for screen readers. */
+  .home-title h1 .ln{ display:inline; }
+  .home-title h1.is-stacked .ln{ display:block; }
   .home-title h1{ font-stretch: var(--title-stretch, normal); }
 
   /* Glitch title overlay — the real h1 stays in the DOM (readable,
@@ -495,7 +501,7 @@
 
     <div class="home-content">
       <div class="home-title">
-        <h1><span>LA DISTORSIÓN</span></h1>
+        <h1 aria-label="La Distorsión"><span><span class="ln">LA </span><span class="ln">DIS</span><span class="ln">TOR</span><span class="ln">SIÓN</span></span></h1>
       </div>
     </div>
   </section>
@@ -797,6 +803,9 @@ var GLITCH_CONFIG = {
      hairlines escaping the letters. */
   title: {
     stretch: 'expanded',        // Archivo width: 'normal' (100%) | 'semi-expanded' (112.5%) | 'expanded' (125%)
+    mobileStack: true,          // on narrow screens the H1 stacks as LA / DIS / TOR / SIÓN…
+    mobileBreakpoint: 640,      // …up to this viewport width (px)
+    mobileMaxHeight: 0.55,      // the stacked title never takes more than this share of the screen height
     restSplit: 3,               // rosa ← | → celeste offset at rest
     glowBlur: 22,               // soft halo around the letters
     glowAlpha: 0.5,
@@ -950,6 +959,13 @@ var GLITCH_CONFIG = {
      px value of title / heartbeat / pointer is multiplied by this. */
   pageTitle: {
     scale: 0.38
+  },
+  /* Names (H3) of the cast and the director: the same effect, smaller,
+     and with a calmer heartbeat because several names share a page. */
+  nameTitle: {
+    selector: '.card h3, #view-direccion h3',
+    scale: 0.2,
+    heartbeatEvery: [5000, 11000]
   },
   maxDpr: 2                     // canvas resolution cap (retina = 2)
 };
@@ -1351,10 +1367,12 @@ var GLITCH_CONFIG = {
     canvas.setAttribute('aria-hidden', 'true');
     var ctx = canvas.getContext('2d');
     if(!ctx) return null;
+    if(!o.cover && getComputedStyle(o.host).position === 'static') o.host.style.position = 'relative';
     o.host.insertBefore(canvas, o.before || null);
 
     var COL = { ink: GL.token('--ink', '#F4EEE8'), luz: GL.token('--luz', '#FF3E7E'), paco: GL.token('--paco', '#4FC3F7') };
     var rand = GL.rand, range = GL.range, pick = GL.pick;
+    var beatEvery = o.every || HB.every;
     function irange(r){ return Math.round(range(r)); }
     function signed(r){ return range(r) * (Math.random() < .5 ? -1 : 1); }
     function clamp01(v){ return v < 0 ? 0 : v > 1 ? 1 : v; }
@@ -1390,20 +1408,26 @@ var GLITCH_CONFIG = {
       c.textAlign = 'left';
       c.textBaseline = 'alphabetic';
     }
-    /* The heading's rendered lines: one Range per word, grouped by their
-       vertical position. Handles the one-line H1 and H2s that wrap on
-       narrow screens. A text Range's box is the font's ascent+descent,
-       so its top plus the font ascent is the baseline the browser uses. */
+    /* The heading's rendered lines: one Range per word (across every text
+       node, so pieces like the stacked H1 work), grouped by vertical
+       position. Words on the same line that sit apart get a space; pieces
+       that touch (DIS·TOR·SIÓN) are joined. A text Range's box is the
+       font's ascent+descent, so its top plus the font ascent is exactly
+       the baseline the browser uses. */
     function readLines(){
-      var node = textEl.firstChild;
-      while(node && node.nodeType !== 3) node = node.nextSibling;
-      if(!node) return [];
-      var str = node.data, r = document.createRange(), lines = [], re = /\S+/g, m;
-      while((m = re.exec(str))){
-        r.setStart(node, m.index); r.setEnd(node, m.index + m[0].length);
-        var b = r.getBoundingClientRect(), last = lines[lines.length - 1];
-        if(last && Math.abs(b.top - last.top) < b.height / 2) last.text = str.slice(last.start, m.index + m[0].length);
-        else lines.push({ start: m.index, text: m[0], left: b.left, top: b.top });
+      var walker = document.createTreeWalker(textEl, NodeFilter.SHOW_TEXT), node;
+      var r = document.createRange(), lines = [];
+      while((node = walker.nextNode())){
+        var str = node.data, re = /\S+/g, m;
+        while((m = re.exec(str))){
+          r.setStart(node, m.index); r.setEnd(node, m.index + m[0].length);
+          var b = r.getBoundingClientRect(), last = lines[lines.length - 1];
+          if(!b.width) continue;
+          if(last && Math.abs(b.top - last.top) < b.height / 2){
+            last.text += (b.left - last.right > font.size * .15 ? ' ' : '') + m[0];
+            last.right = b.right;
+          } else lines.push({ text: m[0], left: b.left, right: b.right, top: b.top });
+        }
       }
       lines.forEach(function(l){ if(font.upper) l.text = l.text.toUpperCase(); });
       return lines;
@@ -1682,7 +1706,7 @@ var GLITCH_CONFIG = {
 
     /* ---------- Heartbeat ---------- */
     var nextBeat = 0, burstEnd = 0, bursting = false;
-    function scheduleBeat(now){ nextBeat = now + range(HB.every); }
+    function scheduleBeat(now){ nextBeat = now + range(beatEvery); }
     function startBurst(now){
       bursting = true;
       burstEnd = now + range(HB.duration);
@@ -1699,6 +1723,8 @@ var GLITCH_CONFIG = {
     function frame(now, dt){
       if(needsBuild && !build()) return;
       rect = canvas.getBoundingClientRect();
+      /* Scrolled out of sight: skip the work, redraw when it comes back. */
+      if(rect.bottom < 0 || rect.top > window.innerHeight){ dirty = true; return; }
       if(!nextBeat) scheduleBeat(now);
       if(kickPending){ kickPending = false; startBurst(now); dirty = true; }
       /* Skip a beat while the pointer is already tearing the title. */
@@ -1932,16 +1958,21 @@ var GLITCH_CONFIG = {
   })();
 
   /* ============================================================
-     Subpage titles (H2 .page-title): the same GlitchText, scaled to
-     their size. Heartbeat and cursor reaction like the home; a burst
-     plays as each one arrives. Only the visible page's title runs.
+     Subpage headings: section titles (H2 .page-title) and the names of
+     the cast and director (H3) use the same GlitchText, scaled to their
+     size. Heartbeat and cursor reaction like the home; a burst plays as
+     each section title arrives. Only the visible page's headings run.
      ============================================================ */
   (function(){
-    var scale = GLITCH_CONFIG.pageTitle.scale;
-    document.querySelectorAll('.page-title').forEach(function(h2){
-      var view = h2.closest('.view');
+    var C = GLITCH_CONFIG;
+    var groups = [
+      { selector: '.page-title', scale: C.pageTitle.scale, kick: true },
+      { selector: C.nameTitle.selector, scale: C.nameTitle.scale, every: C.nameTitle.heartbeatEvery, kick: false }
+    ];
+    groups.forEach(function(g){ document.querySelectorAll(g.selector).forEach(function(el){
+      var view = el.closest('.view');
       if(!view) return;
-      var fx = GlitchText({ textEl: h2, host: h2, scale: scale });
+      var fx = GlitchText({ textEl: el, host: el, scale: g.scale, every: g.every });
       if(!fx) return;
       var visible = !view.hidden;
       document.addEventListener('viewchange', function(e){
@@ -1949,12 +1980,12 @@ var GLITCH_CONFIG = {
         if(!visible) return;
         fx.invalidate();
         if(engine.reduce) fx.renderStatic();
-        else { fx.kick(); engine.wake(); }
+        else { if(g.kick) fx.kick(); engine.wake(); }
       });
       window.addEventListener('resize', function(){ if(engine.reduce && visible) fx.renderStatic(); });
       if(engine.reduce){ if(visible) fx.renderStatic(); }
       else engine.add({ active: function(){ return visible; }, frame: fx.frame });
-    });
+    }); });
   })();
 
 
@@ -2031,8 +2062,11 @@ var GLITCH_CONFIG = {
     if(!titleBox || !h1 || !span) return;
 
     var REF = 1000; // reference px size for measurement
+    var T = GLITCH_CONFIG.title, view = document.getElementById('view-home');
+    var full = span.textContent;
+    var parts = Array.prototype.map.call(span.querySelectorAll('.ln'), function(l){ return l.textContent.trim(); });
     var clone = document.createElement('span');
-    clone.textContent = span.textContent;
+    clone.textContent = full;
     clone.style.position = 'absolute';
     clone.style.left = '-99999px';
     clone.style.top = '0';
@@ -2047,13 +2081,22 @@ var GLITCH_CONFIG = {
     document.body.appendChild(clone);
 
     var rafId = null;
+    function measure(text){ clone.textContent = text; return clone.getBoundingClientRect().width; }
     function fit(){
+      /* Phones: stack the pieces and size the widest line to the width,
+         capped so the stack stays within mobileMaxHeight of the screen. */
+      var stacked = T.mobileStack && parts.length > 1 && window.innerWidth <= T.mobileBreakpoint;
+      h1.classList.toggle('is-stacked', stacked);
       clone.style.fontStretch = getComputedStyle(h1).fontStretch;
       var available = titleBox.clientWidth;
-      var measured = clone.getBoundingClientRect().width;
+      var measured = stacked ? Math.max.apply(null, parts.map(measure)) : measure(full);
       if(!available || !measured) return;
       var px = (available / measured) * REF;
-      px = Math.max(18, Math.min(px, 340));
+      if(stacked){
+        var lineH = parseFloat(getComputedStyle(h1).lineHeight) / parseFloat(getComputedStyle(h1).fontSize) || .86;
+        px = Math.min(px, (view ? view.clientHeight : window.innerHeight) * T.mobileMaxHeight / (parts.length * lineH));
+      } else px = Math.min(px, 340);
+      px = Math.max(18, px);
       h1.style.setProperty('--fit-size', px + 'px');
       /* The glitch canvas redraws its text buffers at the new size. */
       h1.dispatchEvent(new CustomEvent('titlefit'));
