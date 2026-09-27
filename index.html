@@ -825,17 +825,21 @@ var GLITCH_CONFIG = {
      cursor crossing it tears it apart. Works with mouse and finger drag. */
   pointer: {
     speedForMax: 2.2,           // cursor speed (px per ms) that reaches full intensity
-    proximityRange: 0.45,       // distance from the title (fraction of view height) where proximity fades out
-    proximityFloor: 0.2,        // far from the title, intensity is scaled down to this
+    proximityRange: 0.25,       // distance from the title (fraction of view height) where the title stops reacting
+    proximityFloor: 0,          // far from the title it stays still (the background still reacts)
     attack: 0.35,               // how fast intensity rises (0–1 per frame)
     release: 0.3,               // how fast it falls when the cursor stops (the springs then do the elastic part)
-    stripHeight: [4, 40],       // the title is cut into bands of these heights
-    maxShift: 120,              // max horizontal shift of a band at full intensity
-    falloff: 1.2,               // vertical reach of the tear around the cursor, in title heights
-    nearFloor: 0.25,            // bands far from the cursor's Y still move this fraction
-    skewChance: 0.35,           // share of bands that also lean (the diagonal "rasgado")
-    maxSkew: 0.35,
-    maxSplit: 25,               // rosa/celeste separation at full intensity
+    /* The letters break into thin stripes instead of the title sliding
+       as a block: only some stripes move, each to its own side. */
+    stripHeight: [2, 10],       // the title is cut into thin stripes of these heights
+    tearChance: 0.5,            // share of stripes that move; the rest stay put (that contrast is the "break")
+    alongMovement: 0.6,         // share of moving stripes that follow the cursor direction (the rest go against it)
+    maxShift: 36,               // max horizontal shift of a stripe at full intensity
+    falloff: 0.6,               // vertical reach of the tear around the cursor, in title heights
+    nearFloor: 0,               // stripes far from the cursor's Y stay still
+    skewChance: 0.2,            // share of stripes that also lean slightly
+    maxSkew: 0.12,
+    maxSplit: 10,               // rosa/celeste separation at full intensity
     reshuffleEvery: [340, 480], // new band layout while moving (kept under 3 per second)
     stiffness: 180,             // elastic recompose: spring stiffness…
     damping: 13                 // …and damping → settles in ≈ 600 ms with a small overshoot
@@ -1545,7 +1549,11 @@ var GLITCH_CONFIG = {
           y:y, h:hh,
           x: prev ? prev.x : 0, v: prev ? prev.v : 0,
           sk: prev ? prev.sk : 0, skv: prev ? prev.skv : 0,
-          weight: rand(.4, 1),                             // some bands travel further than others
+          /* Each stripe's own fate: still, or moving with/against the
+             cursor by its own amount — so the letters break apart
+             instead of the whole title sliding together. */
+          weight: Math.random() < P.tearChance ? rand(.25, 1) : 0,
+          along: Math.random() < P.alongMovement ? 1 : -1,
           lean: Math.random() < P.skewChance ? (Math.random() < .5 ? -1 : 1) : 0
         });
         y += hh;
@@ -1638,8 +1646,8 @@ var GLITCH_CONFIG = {
       state.tiles.forEach(function(t){
         var d = (t.y + t.h / 2 - cyBuf) / fall;
         var near = P.nearFloor + (1 - P.nearFloor) * Math.exp(-d * d);
-        var tx = ptr.dir * intensity * maxShift * near * t.weight;
-        var tsk = t.lean * intensity * P.maxSkew * near;
+        var tx = ptr.dir * t.along * intensity * maxShift * near * t.weight;
+        var tsk = t.weight ? t.lean * intensity * P.maxSkew * near : 0;
         t.v += (ks * (tx - t.x) - c * t.v) * dt;  t.x += t.v * dt;
         t.skv += (ks * (tsk - t.sk) - c * t.skv) * dt;  t.sk += t.skv * dt;
         if(Math.abs(t.x) > .05 || Math.abs(t.v) > .5 || Math.abs(t.sk) > .0005) moving = true;
