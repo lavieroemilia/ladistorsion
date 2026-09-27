@@ -1,7 +1,11 @@
+<!DOCTYPE html>
+<html lang="es">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>La Distorsión</title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,400..900&display=swap">
 
 <style>
   /* ---------- Tokens ---------- */
@@ -177,7 +181,7 @@
 
   /* Texts sit above the image, anchored to the bottom of the screen, centered — à la referencia */
   .home-content{
-    position:absolute; z-index:2; left:0; right:0; bottom:0;
+    position:absolute; z-index:3; left:0; right:0; bottom:0;
     display:flex; flex-direction:column; align-items:center;
     padding: 0 clamp(1.25rem, 5vw, 2.75rem) clamp(1.25rem, 4vh, 2.25rem);
     pointer-events:none;
@@ -190,6 +194,18 @@
     text-align:center;
   }
   .home-title h1 span{ color: var(--ink); }
+  .home-title h1{ font-stretch: var(--title-stretch, normal); }
+
+  /* Glitch title overlay — the real h1 stays in the DOM (readable,
+     selectable, indexable); a full-view canvas paints its glitched twin
+     on top. Only once the canvas has actually drawn does the h1 text go
+     transparent (.fx-on), so if the script fails the plain title shows. */
+  .title-fx{
+    position:absolute; inset:0; z-index:2;
+    width:100%; height:100%;
+    pointer-events:none;
+  }
+  #view-home.fx-on .home-title h1 span{ color: transparent; }
 
   @media (prefers-reduced-motion: reduce){
     .home-stage .duo{ animation:none; transform:scale(1.32); }
@@ -707,6 +723,46 @@
 </div>
 
 <script>
+/* ============================================================
+   GLITCH_CONFIG — every intensity, timing and size of the glitch
+   language lives here, so it can be tuned by hand without touching
+   the drawing code. Units: CSS px and milliseconds unless noted.
+   [a, b] pairs are random ranges (a value is picked in between).
+   ============================================================ */
+var GLITCH_CONFIG = {
+  /* Title at rest (ref. distorsion-3): white core, fucsia layer to the
+     left, celeste layer to the right, soft glow, a few thin cuts and
+     hairlines escaping the letters. */
+  title: {
+    stretch: 'normal',          // Archivo width: 'normal' (100%) | 'semi-expanded' (112.5%) | 'expanded' (125%)
+    restSplit: 3,               // rosa ← | → celeste offset at rest
+    glowBlur: 22,               // soft halo around the letters
+    glowAlpha: 0.5,
+    restSlices: 2,              // thin bands permanently nudged sideways
+    restSliceHeight: [2, 7],
+    restSliceShift: [2, 8],
+    escapeLines: 3,             // hairlines leaving the text sideways
+    escapeLineWidth: [1, 2],
+    escapeLineReach: [0.03, 0.12], // how far past the text edge (fraction of title width)
+    escapeLineAlpha: 0.85
+  },
+  /* Automatic "heartbeat": every few seconds a short burst tears a few
+     bands of the title and widens the colour split, then it settles.
+     Never more than one burst every 3 s → far below the WCAG 2.3.1
+     three-flashes-per-second limit, and it is displacement, not flashing. */
+  heartbeat: {
+    every: [3000, 6000],
+    duration: [120, 250],
+    strips: [2, 5],
+    stripHeight: [4, 40],
+    shift: [8, 42],
+    split: 9
+  },
+  maxDpr: 2                     // canvas resolution cap (retina = 2)
+};
+</script>
+
+<script>
 (function(){
   var views = { home:'view-home', obra:'view-obra', elenco:'view-elenco', direccion:'view-direccion', funciones:'view-funciones', contacto:'view-contacto' };
   var topbar = document.getElementById('topbar');
@@ -728,6 +784,10 @@
 
     if(!isHome){ window.scrollTo(0,0); }
     updateTopbarScroll();
+
+    /* Other modules (the glitch title) listen for this to start/stop
+       their animation loop only while their view is on screen. */
+    document.dispatchEvent(new CustomEvent('viewchange', { detail:{ key:key } }));
   }
 
   /* Header: transparent at rest, frosted near-black past a small scroll
@@ -792,6 +852,261 @@
     document.body.removeChild(ta);
   }
 
+  /* ============================================================
+     Glitch title (home). The h1 keeps the real text; this paints its
+     glitched twin on a canvas that covers the whole home view.
+
+     How it stays cheap: the title is rasterised ONCE per fit/resize
+     into three offscreen buffers (white core, fucsia, celeste) plus a
+     pre-blurred glow. Each frame only slices those buffers into
+     horizontal bands and copies them with drawImage — no text layout,
+     no filters per frame. One requestAnimationFrame loop, running only
+     while the home is visible and the tab is active.
+     ============================================================ */
+  (function(){
+    var C = GLITCH_CONFIG;
+    var view = document.getElementById('view-home');
+    var h1 = view ? view.querySelector('.home-title h1') : null;
+    var span = h1 ? h1.querySelector('span') : null;
+    if(!view || !h1 || !span) return;
+
+    var canvas = document.createElement('canvas');
+    canvas.className = 'title-fx';
+    canvas.setAttribute('aria-hidden', 'true');
+    var ctx = canvas.getContext('2d');
+    if(!ctx) return;
+    view.insertBefore(canvas, view.querySelector('.home-content'));
+
+    var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    /* Width axis: canvas can only draw Archivo expanded where
+       ctx.fontStretch exists. Where it does not, fall back to normal
+       width for BOTH the h1 and the canvas so they never disagree. */
+    var STRETCH_PCT = { 'normal':'100%', 'semi-expanded':'112.5%', 'expanded':'125%' };
+    var stretch = ('fontStretch' in ctx && STRETCH_PCT[C.title.stretch]) ? C.title.stretch : 'normal';
+    h1.style.setProperty('--title-stretch', STRETCH_PCT[stretch]);
+
+    /* Colours come from the design tokens, never hard-coded RGB. */
+    var rootCS = getComputedStyle(document.documentElement);
+    function token(name, fallback){ return (rootCS.getPropertyValue(name) || '').trim() || fallback; }
+    var COL = { ink: token('--ink', '#F4EEE8'), luz: token('--luz', '#FF3E7E'), paco: token('--paco', '#4FC3F7') };
+
+    function rand(a, b){ return a + Math.random() * (b - a); }
+    function range(r){ return rand(r[0], r[1]); }
+    function irange(r){ return Math.round(range(r)); }
+    function pick(arr){ return arr[Math.floor(Math.random() * arr.length)]; }
+    function signed(r){ return range(r) * (Math.random() < .5 ? -1 : 1); }
+
+    var dpr = 1, buf = null;        // offscreen buffers + text box geometry
+    var needsBuild = true;
+
+    /* ---------- Offscreen buffers: built once per size ---------- */
+    function makeLayer(w, h){
+      var c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      return c;
+    }
+    function setFont(c, px){
+      c.font = '900 ' + px + 'px ' + getComputedStyle(h1).fontFamily;
+      if('fontStretch' in c) c.fontStretch = stretch;
+      if('letterSpacing' in c) c.letterSpacing = (-0.015 * px) + 'px';
+      c.textAlign = 'center';
+      c.textBaseline = 'alphabetic';
+    }
+
+    function build(){
+      var vw = view.clientWidth, vh = view.clientHeight;
+      if(!vw || !vh) return false;          // view hidden: try again when shown
+      dpr = Math.min(C.maxDpr, window.devicePixelRatio || 1);
+      canvas.width = Math.round(vw * dpr);
+      canvas.height = Math.round(vh * dpr);
+
+      var size = parseFloat(getComputedStyle(h1).fontSize);
+      var text = span.textContent;
+      var px = size * dpr;
+      var pad = Math.ceil((C.title.glowBlur * 2 + C.heartbeat.split + 4) * dpr);
+
+      setFont(ctx, px);
+      var m = ctx.measureText(text);
+      var asc = Math.ceil(m.actualBoundingBoxAscent), desc = Math.ceil(m.actualBoundingBoxDescent);
+      var w = Math.ceil(m.width) + pad * 2, hgt = asc + desc + pad * 2;
+      var cx = w / 2, base = pad + asc;
+
+      function textLayer(color){
+        var c = makeLayer(w, hgt), x = c.getContext('2d');
+        setFont(x, px); x.fillStyle = color; x.fillText(text, cx, base);
+        return c;
+      }
+      /* Glow: shadow-only trick (text drawn off-canvas, its shadow shifted
+         back in) — works everywhere, unlike ctx.filter. */
+      var glow = makeLayer(w, hgt), g = glow.getContext('2d');
+      setFont(g, px);
+      var OFF = w * 4, s = C.title.restSplit * dpr * 2;
+      g.shadowBlur = C.title.glowBlur * dpr;
+      g.shadowOffsetX = OFF;
+      g.shadowColor = COL.luz;  g.fillText(text, cx - OFF - s, base);
+      g.shadowColor = COL.paco; g.fillText(text, cx - OFF + s, base);
+
+      /* Where the text sits: align the canvas baseline with the DOM one.
+         An inline span's box is the font's ascent+descent, so its top plus
+         the font ascent is exactly the baseline the browser uses. */
+      var vr = view.getBoundingClientRect(), sr = span.getBoundingClientRect();
+      var domBaseline = (sr.top - vr.top) + m.fontBoundingBoxAscent / dpr;
+      var centerX = (sr.left - vr.left) + sr.width / 2;
+
+      buf = {
+        white: textLayer(COL.ink), luz: textLayer(COL.luz), paco: textLayer(COL.paco), glow: glow,
+        w: w, h: hgt,                         // device px
+        x: centerX * dpr - cx,                // device px, top-left inside the canvas
+        y: domBaseline * dpr - base,
+        textTop: pad, textH: asc + desc,      // device px, the ink area inside the buffer
+        textW: Math.ceil(m.width)
+      };
+      regenRest();
+      view.classList.add('fx-on');
+      needsBuild = false;
+      return true;
+    }
+
+    /* ---------- Glitch state ---------- */
+    var state = {
+      split: C.title.restSplit,   // current colour separation (CSS px)
+      rest: [],                   // thin permanent cuts
+      burst: [],                  // bands torn by the heartbeat
+      lines: []                   // escaping hairlines + dashes
+    };
+
+    /* Non-overlapping horizontal bands across the ink area. */
+    function makeBands(count, hRange, shiftFn){
+      var out = [], tries = 0;
+      while(out.length < count && tries++ < count * 12){
+        var hh = range(hRange) * dpr;
+        var y = buf.textTop + Math.random() * Math.max(1, buf.textH - hh);
+        var clash = out.some(function(b){ return y < b.y + b.h && b.y < y + hh; });
+        if(!clash) out.push({ y:y, h:hh, dx: shiftFn() * dpr, skew:0 });
+      }
+      return out.sort(function(a, b){ return a.y - b.y; });
+    }
+
+    function regenRest(){
+      state.rest = makeBands(C.title.restSlices, C.title.restSliceHeight, function(){ return signed(C.title.restSliceShift); });
+      state.lines = [];
+      var textL = buf.x + (buf.w - buf.textW) / 2, textR = textL + buf.textW;
+      var firstLeft = Math.random() < .5;       // alternate sides so the lines balance
+      for(var i = 0; i < C.title.escapeLines; i++){
+        var y = buf.y + buf.textTop + buf.textH * rand(.15, .85);
+        var left = (i % 2 === 0) === firstLeft;
+        var reach = buf.textW * range(C.title.escapeLineReach);
+        var inside = buf.textW * rand(.05, .3);
+        var x0 = left ? textL - reach : textR - inside;
+        var x1 = left ? textL + inside : textR + reach;
+        var color = pick([COL.luz, COL.paco, COL.ink]);
+        var lw = Math.max(1, Math.round(range(C.title.escapeLineWidth) * dpr));
+        state.lines.push({ x:x0, y:y, w:x1 - x0, h:lw, color:color });
+        /* a couple of short dashes riding next to the line, as in the reference */
+        for(var k = 0; k < 2; k++){
+          var dw = reach * rand(.1, .35);
+          state.lines.push({
+            x: left ? x0 - dw * rand(.3, 1.5) : x1 + dw * rand(.1, 1),
+            y: y + rand(-3, 3) * dpr, w: dw, h: lw, color: color
+          });
+        }
+      }
+    }
+
+    /* Merge rest cuts + burst bands into one ordered list of segments
+       covering the full buffer height (gaps = undisplaced text). */
+    function segments(){
+      var bands = state.rest.concat(state.burst).sort(function(a, b){ return a.y - b.y; });
+      var segs = [], y = 0;
+      bands.forEach(function(b){
+        if(b.y < y) return;                           // overlapping band: skip
+        if(b.y > y) segs.push({ y:y, h:b.y - y, dx:0, skew:0 });
+        segs.push(b); y = b.y + b.h;
+      });
+      if(y < buf.h) segs.push({ y:y, h:buf.h - y, dx:0, skew:0 });
+      return segs;
+    }
+
+    /* ---------- Drawing ---------- */
+    function draw(){
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if(!buf) return;
+      var X = buf.x, Y = buf.y, W = buf.w, sp = state.split * dpr;
+
+      ctx.globalAlpha = C.title.glowAlpha;
+      ctx.drawImage(buf.glow, X, Y);
+      ctx.globalAlpha = 1;
+
+      segments().forEach(function(s){
+        if(s.h <= 0) return;
+        if(s.skew){ ctx.setTransform(1, 0, s.skew, 1, -s.skew * (Y + s.y + s.h / 2), 0); }
+        /* fucsia left + celeste right, added together (they meet as white),
+           then the white core on top: the fringes are what stays visible. */
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.drawImage(buf.luz,  0, s.y, W, s.h, X + s.dx - sp, Y + s.y, W, s.h);
+        ctx.drawImage(buf.paco, 0, s.y, W, s.h, X + s.dx + sp, Y + s.y, W, s.h);
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.drawImage(buf.white, 0, s.y, W, s.h, X + s.dx, Y + s.y, W, s.h);
+        if(s.skew) ctx.setTransform(1, 0, 0, 1, 0, 0);
+      });
+
+      ctx.globalAlpha = C.title.escapeLineAlpha;
+      state.lines.forEach(function(l){ ctx.fillStyle = l.color; ctx.fillRect(l.x, l.y, l.w, l.h); });
+      ctx.globalAlpha = 1;
+    }
+
+    /* ---------- Heartbeat ---------- */
+    var HB = C.heartbeat;
+    var nextBeat = 0, burstEnd = 0, bursting = false;
+    function scheduleBeat(now){ nextBeat = now + range(HB.every); }
+    function startBurst(now){
+      bursting = true;
+      burstEnd = now + range(HB.duration);
+      state.burst = makeBands(irange(HB.strips), HB.stripHeight, function(){ return signed(HB.shift); });
+      state.split = HB.split;
+    }
+    function endBurst(now){
+      bursting = false;
+      state.burst = [];
+      state.split = C.title.restSplit;
+      regenRest();                 // the resting cuts shift a little after every beat
+      scheduleBeat(now);
+    }
+
+    /* ---------- Loop control ---------- */
+    var rafId = null, homeVisible = !view.hidden, dirty = true;
+    function tick(now){
+      rafId = null;
+      if(needsBuild && !build()) return;
+      if(!nextBeat) scheduleBeat(now);
+      if(!bursting && now >= nextBeat){ startBurst(now); dirty = true; }
+      else if(bursting && now >= burstEnd){ endBurst(now); dirty = true; }
+      if(dirty){ draw(); dirty = false; }
+      rafId = requestAnimationFrame(tick);
+    }
+    function start(){ if(!rafId) rafId = requestAnimationFrame(tick); }
+    function stop(){ if(rafId){ cancelAnimationFrame(rafId); rafId = null; } }
+
+    function update(){
+      if(!homeVisible){ stop(); return; }
+      if(needsBuild && build()) dirty = true;
+      if(reduceMotion){ draw(); return; }      // static split, no loop, no heartbeat
+      if(document.hidden) stop(); else { dirty = true; start(); }
+    }
+
+    h1.addEventListener('titlefit', function(){ needsBuild = true; update(); });
+    document.addEventListener('viewchange', function(e){
+      homeVisible = e.detail.key === 'home';
+      if(homeVisible) needsBuild = true;       // size may have changed while away
+      update();
+    });
+    document.addEventListener('visibilitychange', update);
+    update();
+  })();
+
   /* Fit the home title to the full available width (edge to edge, same
      margins as the header) at any viewport size. Measures the text at a
      fixed reference size on a hidden clone, then scales linearly — exact
@@ -821,12 +1136,15 @@
 
     var rafId = null;
     function fit(){
+      clone.style.fontStretch = getComputedStyle(h1).fontStretch;
       var available = titleBox.clientWidth;
       var measured = clone.getBoundingClientRect().width;
       if(!available || !measured) return;
       var px = (available / measured) * REF;
       px = Math.max(18, Math.min(px, 340));
       h1.style.setProperty('--fit-size', px + 'px');
+      /* The glitch canvas redraws its text buffers at the new size. */
+      h1.dispatchEvent(new CustomEvent('titlefit'));
     }
     function scheduleFit(){
       if(rafId) cancelAnimationFrame(rafId);
