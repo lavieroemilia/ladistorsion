@@ -207,6 +207,24 @@
   }
   #view-home.fx-on .home-title h1 span{ color: transparent; }
 
+  /* Photo reaction (built by JS, only when motion is allowed):
+     two tinted silhouettes of the duo behind the photo — the cut-out
+     photo is its own mask — that slide apart with the glitch intensity
+     (ref. distorsion-2), plus a canvas that slips a few bands of the
+     photo sideways. Same blur and slow pan as the photo itself. */
+  .duo-ghost{ position:absolute; inset:0; opacity:0; pointer-events:none; will-change:transform, opacity; }
+  .duo-ghost-blur{ position:absolute; inset:0; filter: blur(clamp(5px, 1vw, 14px)); }
+  .duo-ghost-in{
+    position:absolute; inset:0;
+    transform: scale(1.32);
+    animation: duoPan 34s ease-in-out infinite alternate;
+    -webkit-mask: var(--duo-mask) center 40% / cover no-repeat;
+    mask: var(--duo-mask) center 40% / cover no-repeat;
+  }
+  .duo-ghost.luz .duo-ghost-in{ background: var(--luz); }
+  .duo-ghost.paco .duo-ghost-in{ background: var(--paco); }
+  .photo-fx{ position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+
   @media (prefers-reduced-motion: reduce){
     .home-stage .duo{ animation:none; transform:scale(1.32); }
     .cursor-halo{ display:none; }
@@ -734,7 +752,7 @@ var GLITCH_CONFIG = {
      left, celeste layer to the right, soft glow, a few thin cuts and
      hairlines escaping the letters. */
   title: {
-    stretch: 'normal',          // Archivo width: 'normal' (100%) | 'semi-expanded' (112.5%) | 'expanded' (125%)
+    stretch: 'expanded',        // Archivo width: 'normal' (100%) | 'semi-expanded' (112.5%) | 'expanded' (125%)
     restSplit: 3,               // rosa ← | → celeste offset at rest
     glowBlur: 22,               // soft halo around the letters
     glowAlpha: 0.5,
@@ -757,6 +775,49 @@ var GLITCH_CONFIG = {
     stripHeight: [4, 40],
     shift: [8, 42],
     split: 9
+  },
+  /* Pointer interaction (ref. gif.gif). Intensity (0–1) = cursor speed ×
+     proximity to the title: a still cursor leaves the title clean, a fast
+     cursor crossing it tears it apart. Works with mouse and finger drag. */
+  pointer: {
+    speedForMax: 2.2,           // cursor speed (px per ms) that reaches full intensity
+    proximityRange: 0.45,       // distance from the title (fraction of view height) where proximity fades out
+    proximityFloor: 0.2,        // far from the title, intensity is scaled down to this
+    attack: 0.35,               // how fast intensity rises (0–1 per frame)
+    release: 0.3,               // how fast it falls when the cursor stops (the springs then do the elastic part)
+    stripHeight: [4, 40],       // the title is cut into bands of these heights
+    maxShift: 120,              // max horizontal shift of a band at full intensity
+    falloff: 1.2,               // vertical reach of the tear around the cursor, in title heights
+    nearFloor: 0.25,            // bands far from the cursor's Y still move this fraction
+    skewChance: 0.35,           // share of bands that also lean (the diagonal "rasgado")
+    maxSkew: 0.35,
+    maxSplit: 25,               // rosa/celeste separation at full intensity
+    reshuffleEvery: [340, 480], // new band layout while moving (kept under 3 per second)
+    stiffness: 180,             // elastic recompose: spring stiffness…
+    damping: 13                 // …and damping → settles in ≈ 600 ms with a small overshoot
+  },
+  /* Loose glitch bars that spark around the cursor while it moves. */
+  bars: {
+    perSecond: 45,              // at full intensity
+    width: [20, 160],
+    height: [1, 3],
+    life: [80, 300],
+    spreadX: 260,               // scatter around the cursor
+    spreadY: 150,
+    max: 40,
+    alpha: 0.9
+  },
+  /* Background photo reaction — subtler than the title (ref. distorsion-2):
+     a fucsia and a celeste silhouette slide out from behind the duo, and a
+     few bands of the photo slip sideways. */
+  photo: {
+    ghostShift: 38,             // silhouettes' offset at full intensity
+    ghostAlpha: 0.55,
+    bands: [5, 9],
+    bandHeight: [12, 70],
+    shift: 55,
+    bandAlpha: 0.75,            // opacity of the slipped bands
+    smoothing: 0.12             // photo follows the title intensity with this lag
   },
   maxDpr: 2                     // canvas resolution cap (retina = 2)
 };
@@ -860,11 +921,13 @@ var GLITCH_CONFIG = {
      into three offscreen buffers (white core, fucsia, celeste) plus a
      pre-blurred glow. Each frame only slices those buffers into
      horizontal bands and copies them with drawImage — no text layout,
-     no filters per frame. One requestAnimationFrame loop, running only
-     while the home is visible and the tab is active.
+     no filters per frame. One requestAnimationFrame loop drives the
+     title, the loose bars and the photo, and it only runs while the
+     home is visible and the tab is active; when nothing moves it keeps
+     ticking but skips drawing.
      ============================================================ */
   (function(){
-    var C = GLITCH_CONFIG;
+    var C = GLITCH_CONFIG, P = C.pointer, HB = C.heartbeat;
     var view = document.getElementById('view-home');
     var h1 = view ? view.querySelector('.home-title h1') : null;
     var span = h1 ? h1.querySelector('span') : null;
@@ -889,13 +952,18 @@ var GLITCH_CONFIG = {
     /* Colours come from the design tokens, never hard-coded RGB. */
     var rootCS = getComputedStyle(document.documentElement);
     function token(name, fallback){ return (rootCS.getPropertyValue(name) || '').trim() || fallback; }
-    var COL = { ink: token('--ink', '#F4EEE8'), luz: token('--luz', '#FF3E7E'), paco: token('--paco', '#4FC3F7') };
+    var COL = {
+      ink: token('--ink', '#F4EEE8'), luz: token('--luz', '#FF3E7E'),
+      paco: token('--paco', '#4FC3F7'), bg: token('--bg', '#150F1A')
+    };
 
     function rand(a, b){ return a + Math.random() * (b - a); }
     function range(r){ return rand(r[0], r[1]); }
     function irange(r){ return Math.round(range(r)); }
     function pick(arr){ return arr[Math.floor(Math.random() * arr.length)]; }
     function signed(r){ return range(r) * (Math.random() < .5 ? -1 : 1); }
+    function clamp01(v){ return v < 0 ? 0 : v > 1 ? 1 : v; }
+    function smoothstep(t){ t = clamp01(t); return t * t * (3 - 2 * t); }
 
     var dpr = 1, buf = null;        // offscreen buffers + text box geometry
     var needsBuild = true;
@@ -963,6 +1031,8 @@ var GLITCH_CONFIG = {
         textW: Math.ceil(m.width)
       };
       regenRest();
+      makeTiles();
+      photo.build(vw, vh);
       view.classList.add('fx-on');
       needsBuild = false;
       return true;
@@ -973,7 +1043,9 @@ var GLITCH_CONFIG = {
       split: C.title.restSplit,   // current colour separation (CSS px)
       rest: [],                   // thin permanent cuts
       burst: [],                  // bands torn by the heartbeat
-      lines: []                   // escaping hairlines + dashes
+      tiles: [],                  // bands torn by the pointer (elastic springs)
+      lines: [],                  // escaping hairlines + dashes
+      bars: []                    // loose bars around the cursor
     };
 
     /* Non-overlapping horizontal bands across the ink area. */
@@ -983,7 +1055,7 @@ var GLITCH_CONFIG = {
         var hh = range(hRange) * dpr;
         var y = buf.textTop + Math.random() * Math.max(1, buf.textH - hh);
         var clash = out.some(function(b){ return y < b.y + b.h && b.y < y + hh; });
-        if(!clash) out.push({ y:y, h:hh, dx: shiftFn() * dpr, skew:0 });
+        if(!clash) out.push({ y:y, h:hh, dx: shiftFn() * dpr });
       }
       return out.sort(function(a, b){ return a.y - b.y; });
     }
@@ -1014,17 +1086,49 @@ var GLITCH_CONFIG = {
       }
     }
 
-    /* Merge rest cuts + burst bands into one ordered list of segments
-       covering the full buffer height (gaps = undisplaced text). */
+    /* Pointer tiles: contiguous bands of random height covering the whole
+       ink area, each one an independent spring (x = shift, sk = lean).
+       On a reshuffle the new bands inherit the motion of the old band
+       under them, so the tear changes shape without jumping. */
+    function tileAt(tiles, y){
+      for(var i = 0; i < tiles.length; i++){ if(y >= tiles[i].y && y < tiles[i].y + tiles[i].h) return tiles[i]; }
+      return null;
+    }
+    function makeTiles(){
+      var old = state.tiles, out = [], y = buf.textTop, end = buf.textTop + buf.textH;
+      while(y < end){
+        var hh = Math.min(range(P.stripHeight) * dpr, end - y);
+        var prev = tileAt(old, y + hh / 2);
+        out.push({
+          y:y, h:hh,
+          x: prev ? prev.x : 0, v: prev ? prev.v : 0,
+          sk: prev ? prev.sk : 0, skv: prev ? prev.skv : 0,
+          weight: rand(.4, 1),                             // some bands travel further than others
+          lean: Math.random() < P.skewChance ? (Math.random() < .5 ? -1 : 1) : 0
+        });
+        y += hh;
+      }
+      state.tiles = out;
+    }
+
+    /* Merge every band source into ordered, non-overlapping segments
+       over the full buffer height. A segment's shift is the sum of the
+       sources covering it; its lean comes from the pointer tile. */
     function segments(){
-      var bands = state.rest.concat(state.burst).sort(function(a, b){ return a.y - b.y; });
-      var segs = [], y = 0;
-      bands.forEach(function(b){
-        if(b.y < y) return;                           // overlapping band: skip
-        if(b.y > y) segs.push({ y:y, h:b.y - y, dx:0, skew:0 });
-        segs.push(b); y = b.y + b.h;
-      });
-      if(y < buf.h) segs.push({ y:y, h:buf.h - y, dx:0, skew:0 });
+      var cuts = [0, buf.h];
+      function addEdges(b){ cuts.push(b.y, b.y + b.h); }
+      state.rest.forEach(addEdges); state.burst.forEach(addEdges); state.tiles.forEach(addEdges);
+      cuts.sort(function(a, b){ return a - b; });
+      var segs = [];
+      for(var i = 0; i < cuts.length - 1; i++){
+        var a = cuts[i], b = cuts[i + 1];
+        if(b - a < 0.5) continue;
+        var mid = (a + b) / 2, dx = 0, t = tileAt(state.tiles, mid), r;
+        if((r = tileAt(state.rest, mid))) dx += r.dx;
+        if((r = tileAt(state.burst, mid))) dx += r.dx;
+        if(t) dx += t.x;
+        segs.push({ y:a, h:b - a, dx:dx, skew: t ? t.sk : 0, skewCY: t ? t.y + t.h / 2 : mid });
+      }
       return segs;
     }
 
@@ -1041,8 +1145,7 @@ var GLITCH_CONFIG = {
       ctx.globalAlpha = 1;
 
       segments().forEach(function(s){
-        if(s.h <= 0) return;
-        if(s.skew){ ctx.setTransform(1, 0, s.skew, 1, -s.skew * (Y + s.y + s.h / 2), 0); }
+        if(Math.abs(s.skew) > 0.002){ ctx.setTransform(1, 0, s.skew, 1, -s.skew * (Y + s.skewCY), 0); }
         /* fucsia left + celeste right, added together (they meet as white),
            then the white core on top: the fringes are what stays visible. */
         ctx.globalCompositeOperation = 'lighter';
@@ -1050,51 +1153,257 @@ var GLITCH_CONFIG = {
         ctx.drawImage(buf.paco, 0, s.y, W, s.h, X + s.dx + sp, Y + s.y, W, s.h);
         ctx.globalCompositeOperation = 'source-over';
         ctx.drawImage(buf.white, 0, s.y, W, s.h, X + s.dx, Y + s.y, W, s.h);
-        if(s.skew) ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
       });
 
       ctx.globalAlpha = C.title.escapeLineAlpha;
       state.lines.forEach(function(l){ ctx.fillStyle = l.color; ctx.fillRect(l.x, l.y, l.w, l.h); });
+
+      ctx.globalAlpha = C.bars.alpha;
+      state.bars.forEach(function(b){ ctx.fillStyle = b.color; ctx.fillRect(b.x * dpr, b.y * dpr, b.w * dpr, Math.max(1, Math.round(b.h * dpr))); });
       ctx.globalAlpha = 1;
     }
 
+    /* ---------- Pointer: speed × proximity → intensity ---------- */
+    var ptr = { x: -1, y: -1, t: 0, vx: 0, vy: 0, dir: 1, has: false };
+    var intensity = 0, targetI = 0;
+
+    function pointerAt(clientX, clientY, isStart){
+      var vr = view.getBoundingClientRect();
+      var x = clientX - vr.left, y = clientY - vr.top, now = performance.now();
+      if(ptr.has && !isStart){
+        var dt = Math.max(8, now - ptr.t);                  // ms; floor avoids spikes from bunched events
+        ptr.vx = ptr.vx * .5 + ((x - ptr.x) / dt) * .5;     // smoothed velocity, px/ms
+        ptr.vy = ptr.vy * .5 + ((y - ptr.y) / dt) * .5;
+        if(Math.abs(ptr.vx) > .05) ptr.dir = ptr.vx > 0 ? 1 : -1;
+      }
+      ptr.x = x; ptr.y = y; ptr.t = now; ptr.has = true;
+      if(!isStart) wake();
+    }
+
+    function proximity(){
+      if(!buf) return 0;
+      var tl = (buf.x + (buf.w - buf.textW) / 2) / dpr, tr = tl + buf.textW / dpr;
+      var tt = (buf.y + buf.textTop) / dpr, tb = tt + buf.textH / dpr;
+      var dx = Math.max(tl - ptr.x, 0, ptr.x - tr), dy = Math.max(tt - ptr.y, 0, ptr.y - tb);
+      var dist = Math.sqrt(dx * dx + dy * dy);
+      var p = 1 - smoothstep(dist / (P.proximityRange * view.clientHeight));
+      return P.proximityFloor + (1 - P.proximityFloor) * p;
+    }
+
+    var lastShuffle = 0, nextShuffle = 0, barAcc = 0;
+
+    function stepPointer(now, dt){
+      /* Velocity decays on its own: if no event arrives, the cursor is still. */
+      if(now - ptr.t > 40){ ptr.vx *= .6; ptr.vy *= .6; }
+      var speed = Math.sqrt(ptr.vx * ptr.vx + ptr.vy * ptr.vy);
+      targetI = ptr.has ? clamp01(speed / P.speedForMax) * proximity() : 0;
+      intensity += (targetI - intensity) * (targetI > intensity ? P.attack : P.release);
+      if(intensity < .002) intensity = 0;
+
+      /* New band layout from time to time while the tear is active. */
+      if(intensity > .15 && now >= nextShuffle){
+        makeTiles();
+        lastShuffle = now; nextShuffle = now + range(P.reshuffleEvery);
+      }
+
+      /* Springs: each band chases its target shift/lean; when the cursor
+         stops the targets drop to 0 and the bands snap back elastically. */
+      var cyBuf = ptr.y * dpr - buf.y, fall = P.falloff * buf.textH;
+      var k = P.stiffness, c = P.damping, moving = false;
+      state.tiles.forEach(function(t){
+        var d = (t.y + t.h / 2 - cyBuf) / fall;
+        var near = P.nearFloor + (1 - P.nearFloor) * Math.exp(-d * d);
+        var tx = ptr.dir * intensity * P.maxShift * dpr * near * t.weight;
+        var tsk = t.lean * intensity * P.maxSkew * near;
+        t.v += (k * (tx - t.x) - c * t.v) * dt;  t.x += t.v * dt;
+        t.skv += (k * (tsk - t.sk) - c * t.skv) * dt;  t.sk += t.skv * dt;
+        if(Math.abs(t.x) > .05 || Math.abs(t.v) > .5 || Math.abs(t.sk) > .0005) moving = true;
+        else { t.x = 0; t.v = 0; t.sk = 0; t.skv = 0; }
+      });
+
+      /* Colour split widens with intensity (heartbeat can widen it too). */
+      var split = C.title.restSplit + (P.maxSplit - C.title.restSplit) * intensity;
+      state.split = bursting ? Math.max(split, HB.split) : split;
+
+      /* Loose bars near the cursor, spawned in proportion to intensity. */
+      barAcc += intensity * C.bars.perSecond * dt;
+      while(barAcc >= 1){
+        barAcc -= 1;
+        if(state.bars.length >= C.bars.max) continue;
+        state.bars.push({
+          x: ptr.x + rand(-1, 1) * C.bars.spreadX - rand(0, 1) * 80,
+          y: ptr.y + rand(-1, 1) * C.bars.spreadY,
+          w: range(C.bars.width), h: range(C.bars.height),
+          color: pick([COL.luz, COL.paco, COL.ink]),
+          die: now + range(C.bars.life)
+        });
+      }
+      state.bars = state.bars.filter(function(b){ return b.die > now; });
+
+      return moving || intensity > 0 || state.bars.length > 0;
+    }
+
+    /* ---------- Background photo: ghosts + slipping bands ---------- */
+    var photo = (function(){
+      var stage = view.querySelector('.home-stage');
+      var duo = stage ? stage.querySelector('.duo') : null;
+      var img = duo ? duo.querySelector('img') : null;
+      var api = { build: function(){}, step: function(){ return false; } };
+      if(!stage || !duo || !img || reduceMotion) return api;
+
+      /* Two coloured silhouettes of the duo (the photo is a cut-out with
+         alpha, so it doubles as its own mask). They sit behind the photo
+         and slide out sideways — rosa to the left, celeste to the right. */
+      var ghosts = ['luz', 'paco'].map(function(tone){
+        var outer = document.createElement('div');
+        outer.className = 'duo-ghost ' + tone;
+        outer.setAttribute('aria-hidden', 'true');
+        outer.innerHTML = '<div class="duo-ghost-blur"><div class="duo-ghost-in"></div></div>';
+        outer.querySelector('.duo-ghost-in').style.setProperty('--duo-mask', 'url("' + img.src + '")');
+        stage.insertBefore(outer, duo);
+        return outer;
+      });
+      /* Keep the ghosts' slow pan in step with the photo's own pan. */
+      function syncPan(){
+        if(!duo.getAnimations) return;
+        var a = duo.getAnimations()[0];
+        if(!a) return;
+        ghosts.forEach(function(g){
+          var ga = g.querySelector('.duo-ghost-in').getAnimations()[0];
+          if(ga) ga.currentTime = a.currentTime;
+        });
+      }
+      syncPan();
+
+      /* Slipping bands: a small canvas above the photo (below the scrim)
+         that repaints a few horizontal bands of a pre-blurred copy of the
+         photo, shifted sideways. It follows the photo's live pan
+         transform so the bands line up with what is underneath. */
+      var pc = document.createElement('canvas');
+      pc.className = 'photo-fx';
+      pc.setAttribute('aria-hidden', 'true');
+      stage.appendChild(pc);
+      var px = pc.getContext('2d');
+      var small = null, pvw = 0, pvh = 0, pdpr = 1, bands = [], pI = 0, painted = false;
+
+      api.build = function(vw, vh){
+        pvw = vw; pvh = vh; pdpr = dpr;
+        pc.width = Math.round(vw * pdpr); pc.height = Math.round(vh * pdpr);
+        if(!img.complete || !img.naturalWidth){ img.addEventListener('load', function(){ needsBuild = true; }, { once:true }); return; }
+        /* Blur by down-sampling (same look as the CSS blur, no ctx.filter
+           needed): object-fit:cover + object-position:center 40%. */
+        var blurPx = Math.max(5, Math.min(14, vw * .01));
+        var scale = 1 / (blurPx * 1.2);
+        small = makeLayer(Math.max(2, Math.round(vw * scale)), Math.max(2, Math.round(vh * scale)));
+        var s = small.getContext('2d'), iw = img.naturalWidth, ih = img.naturalHeight;
+        var cs = Math.max(vw / iw, vh / ih), dw = iw * cs, dh = ih * cs;
+        s.imageSmoothingQuality = 'high';
+        if('filter' in s) s.filter = 'contrast(1.08)';          // same grade as the CSS photo
+        s.drawImage(img, (vw - dw) * .5 * scale, (vh - dh) * .4 * scale, dw * scale, dh * scale);
+        bands = [];
+      };
+
+      function newBands(){
+        bands = [];
+        var n = irange(C.photo.bands);
+        for(var i = 0; i < n; i++){
+          bands.push({ y: rand(.05, .95) * pvh, h: range(C.photo.bandHeight), w: rand(.4, 1) * (Math.random() < .5 ? -1 : 1) });
+        }
+      }
+
+      api.step = function(level){
+        pI += (level - pI) * C.photo.smoothing;
+        if(pI < .003) pI = 0;
+        var gx = pI * C.photo.ghostShift, ga = pI * C.photo.ghostAlpha;
+        ghosts[0].style.transform = 'translate3d(' + (-gx).toFixed(2) + 'px,0,0)';
+        ghosts[1].style.transform = 'translate3d(' + gx.toFixed(2) + 'px,0,0)';
+        ghosts[0].style.opacity = ghosts[1].style.opacity = ga.toFixed(3);
+
+        if(!small) return pI > 0;
+        if(pI === 0){
+          if(painted){ px.setTransform(1, 0, 0, 1, 0, 0); px.clearRect(0, 0, pc.width, pc.height); painted = false; bands = []; }
+          return false;
+        }
+        if(!bands.length || Math.random() < .04) newBands();
+
+        /* The photo's live transform (scale + slow pan), around its centre. */
+        var m = new DOMMatrix(getComputedStyle(duo).transform);
+        var cx = pvw / 2, cy = pvh / 2;
+        px.setTransform(1, 0, 0, 1, 0, 0);
+        px.clearRect(0, 0, pc.width, pc.height);
+        bands.forEach(function(b){
+          var dx = b.w * pI * C.photo.shift;
+          px.save();
+          px.setTransform(pdpr, 0, 0, pdpr, 0, 0);
+          px.beginPath(); px.rect(0, b.y, pvw, b.h); px.clip();
+          /* Semi-transparent: the band reads as a slipped echo of the photo
+             (and lets the coloured ghosts show through), never as a patch. */
+          px.globalAlpha = C.photo.bandAlpha;
+          px.translate(dx + cx, cy);
+          px.transform(m.a, m.b, m.c, m.d, m.e, m.f);
+          px.translate(-cx, -cy);
+          px.drawImage(small, 0, 0, pvw, pvh);
+          px.restore();
+        });
+        painted = true;
+        return true;
+      };
+      return api;
+    })();
+
     /* ---------- Heartbeat ---------- */
-    var HB = C.heartbeat;
     var nextBeat = 0, burstEnd = 0, bursting = false;
     function scheduleBeat(now){ nextBeat = now + range(HB.every); }
     function startBurst(now){
       bursting = true;
       burstEnd = now + range(HB.duration);
       state.burst = makeBands(irange(HB.strips), HB.stripHeight, function(){ return signed(HB.shift); });
-      state.split = HB.split;
     }
     function endBurst(now){
       bursting = false;
       state.burst = [];
-      state.split = C.title.restSplit;
       regenRest();                 // the resting cuts shift a little after every beat
       scheduleBeat(now);
     }
 
     /* ---------- Loop control ---------- */
-    var rafId = null, homeVisible = !view.hidden, dirty = true;
+    var rafId = null, homeVisible = !view.hidden, dirty = true, lastT = 0;
     function tick(now){
       rafId = null;
       if(needsBuild && !build()) return;
+      var dt = lastT ? Math.min(1 / 30, (now - lastT) / 1000) : 1 / 60;
+      lastT = now;
       if(!nextBeat) scheduleBeat(now);
-      if(!bursting && now >= nextBeat){ startBurst(now); dirty = true; }
-      else if(bursting && now >= burstEnd){ endBurst(now); dirty = true; }
+      /* Skip a beat while the pointer is already tearing the title. */
+      if(!bursting && now >= nextBeat){
+        if(intensity > .1) scheduleBeat(now); else { startBurst(now); dirty = true; }
+      } else if(bursting && now >= burstEnd){ endBurst(now); dirty = true; }
+
+      if(stepPointer(now, dt)) dirty = true;
+      if(bursting) dirty = true;
+      photo.step(intensity);
       if(dirty){ draw(); dirty = false; }
       rafId = requestAnimationFrame(tick);
     }
-    function start(){ if(!rafId) rafId = requestAnimationFrame(tick); }
+    function start(){ if(!rafId){ lastT = 0; rafId = requestAnimationFrame(tick); } }
     function stop(){ if(rafId){ cancelAnimationFrame(rafId); rafId = null; } }
+    function wake(){ if(homeVisible && !document.hidden && !reduceMotion) start(); }
 
     function update(){
       if(!homeVisible){ stop(); return; }
       if(needsBuild && build()) dirty = true;
-      if(reduceMotion){ draw(); return; }      // static split, no loop, no heartbeat
+      if(reduceMotion){ draw(); return; }      // static split, no loop, no heartbeat, no pointer
       if(document.hidden) stop(); else { dirty = true; start(); }
+    }
+
+    /* Pointer input: mouse everywhere on the home; on touch screens a
+       finger dragging across the home does the same (touch events fire
+       continuously even though the home never scrolls). */
+    if(!reduceMotion){
+      view.addEventListener('mousemove', function(e){ pointerAt(e.clientX, e.clientY, false); });
+      view.addEventListener('touchstart', function(e){ var t = e.touches[0]; if(t) pointerAt(t.clientX, t.clientY, true); }, { passive:true });
+      view.addEventListener('touchmove', function(e){ var t = e.touches[0]; if(t) pointerAt(t.clientX, t.clientY, false); }, { passive:true });
     }
 
     h1.addEventListener('titlefit', function(){ needsBuild = true; update(); });
