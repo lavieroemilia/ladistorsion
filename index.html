@@ -122,6 +122,48 @@
   }
   a.toptag:hover, a.toptag:focus-visible, a.toptag.active{ color:var(--ink); text-decoration:underline; text-underline-offset:.25em; text-decoration-thickness:1px; }
 
+  .nav-toggle{ display:none; }
+
+  /* Phones: three columns — brand | sections | Instagram + Contacto.
+     .topbar-left dissolves (display:contents) so the brand and the
+     section list become columns of their own. Scrolling down folds the
+     bar to just the brand and a chevron; scrolling up, or tapping the
+     bar, unfolds it (see the script). */
+  @media (max-width:640px){
+    #topbar{
+      display:grid; grid-template-columns:auto auto auto;
+      justify-content:space-between; align-items:start; column-gap:.9rem;
+      transition: padding .25s ease, background-color .2s ease, backdrop-filter .2s ease, -webkit-backdrop-filter .2s ease;
+    }
+    .topbar-left{ display:contents; }
+    .topbar-right{ flex-direction:column; align-items:flex-end; row-gap:.35rem; }
+    .nav-list, .topbar-right{
+      max-height:9rem; opacity:1; visibility:visible;
+      transition: max-height .3s ease, opacity .2s ease, visibility 0s linear 0s;
+    }
+    #topbar.is-collapsed{
+      padding-top: calc(.85rem + env(safe-area-inset-top, 0px)); padding-bottom:.85rem;
+      pointer-events:auto; cursor:pointer;
+      background: rgba(10,7,13,.85);
+      -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+    }
+    #topbar.is-collapsed .nav-list, #topbar.is-collapsed .topbar-right{
+      max-height:0; opacity:0; visibility:hidden; overflow:hidden;
+      transition: max-height .3s ease, opacity .15s ease, visibility 0s linear .3s;
+    }
+    #topbar.is-collapsed .nav-toggle{
+      display:flex; align-items:center; justify-content:center;
+      position:absolute; right: calc(clamp(1.25rem, 5vw, 2.75rem) - 12px);
+      top: calc(.85rem + env(safe-area-inset-top, 0px) - 12px);
+      width:44px; height:44px;                         /* comfortable tap target */
+      background:none; border:0; padding:0; color:var(--ink); cursor:pointer;
+      pointer-events:auto;
+    }
+  }
+  @media (max-width:640px) and (prefers-reduced-motion: reduce){
+    #topbar, .nav-list, .topbar-right{ transition:none !important; }
+  }
+
   /* ---------- HOME (fixed, no scroll) ---------- */
   #view-home{
     position:relative;
@@ -498,6 +540,10 @@
       <a class="toptag" href="https://www.instagram.com/ladistorsion.obra/" target="_blank" rel="noopener">Instagram</a>
       <a class="toptag" href="#contacto" data-nav data-key="contacto">Contacto</a>
     </div>
+    <!-- Phones: shown only while the bar is folded; unfolds it again. -->
+    <button type="button" class="nav-toggle" aria-label="Mostrar menú" aria-expanded="false">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
+    </button>
   </header>
 
   <!-- ============ HOME ============ -->
@@ -1017,8 +1063,40 @@ var GLITCH_CONFIG = {
      background changes. */
   function updateTopbarScroll(){
     topbar.classList.toggle('is-scrolled', window.scrollY > 20);
+    foldTopbar();
   }
   window.addEventListener('scroll', updateTopbarScroll, { passive:true });
+
+  /* Phones: the bar folds while reading (scrolling down) to just the
+     brand and a chevron, and unfolds when scrolling back up, at the top
+     of the page, or when tapped. Small movements are ignored so it
+     doesn't flicker. */
+  var phone = window.matchMedia('(max-width:640px)');
+  var navToggle = topbar.querySelector('.nav-toggle');
+  var lastY = window.scrollY;
+  function setFolded(folded){
+    if(topbar.classList.contains('is-collapsed') === folded) return;
+    topbar.classList.toggle('is-collapsed', folded);
+    if(navToggle) navToggle.setAttribute('aria-expanded', String(!folded));
+  }
+  function foldTopbar(){
+    var y = window.scrollY, dy = y - lastY;
+    if(!phone.matches || y < 40){ setFolded(false); lastY = y; return; }
+    if(dy > 8){ setFolded(true); lastY = y; }
+    else if(dy < -8){ setFolded(false); lastY = y; }
+  }
+  function unfold(){ setFolded(false); lastY = window.scrollY; }
+  /* Tapping anywhere on the folded bar (or its chevron) unfolds it;
+     the brand link still takes you home. */
+  topbar.addEventListener('click', function(e){
+    if(!topbar.classList.contains('is-collapsed')) return;
+    if(e.target.closest('a')) return;
+    e.preventDefault();
+    unfold();
+  });
+  /* Keyboard users reaching the bar get the full menu. */
+  topbar.addEventListener('focusin', function(e){ if(!e.target.closest('.brand')) unfold(); });
+  phone.addEventListener ? phone.addEventListener('change', foldTopbar) : phone.addListener(foldTopbar);
 
   /* Site-wide content grid: measure the header's own nav column left edge
      and expose it as --content-x, so every page's title/content/footer
