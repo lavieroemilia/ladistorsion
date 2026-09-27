@@ -133,11 +133,16 @@
   /* Full-bleed cutout stage — image fills the entire screen, no background,
      the dark page bg shows through everywhere the figures aren't. Tight,
      close-up framing (primer plano). */
-  .home-stage{ position:absolute; inset:0; z-index:0; }
+  /* Photo framing as variables so phones can zoom in and lift the duo
+     (heads above the stacked title); the ghosts share them. */
+  .home-stage{ position:absolute; inset:0; z-index:0; --duo-scale:1.32; --duo-y:0%; }
+  @media (max-width:640px){
+    .home-stage{ --duo-scale:1.5; --duo-y:-4%; }
+  }
   .home-stage .duo{
     position:absolute; inset:0;
     filter: blur(clamp(5px, 1vw, 14px)) contrast(1.08);
-    transform: scale(1.32);
+    transform: scale(var(--duo-scale)) translate(0, var(--duo-y));
     animation: duoPan 34s ease-in-out infinite alternate;
   }
   .home-stage .duo img{
@@ -145,8 +150,8 @@
     display:block;
   }
   @keyframes duoPan{
-    from{ transform: scale(1.32) translate(0,0); }
-    to{ transform: scale(1.38) translate(-1%, 0); }
+    from{ transform: scale(var(--duo-scale)) translate(0, var(--duo-y)); }
+    to{ transform: scale(calc(var(--duo-scale) + .06)) translate(-1%, var(--duo-y)); }
   }
 
   .home-scrim{
@@ -211,7 +216,7 @@
   .duo-ghost-blur{ position:absolute; inset:0; filter: blur(clamp(5px, 1vw, 14px)); }
   .duo-ghost-in{
     position:absolute; inset:0;
-    transform: scale(1.32);
+    transform: scale(var(--duo-scale)) translate(0, var(--duo-y));
     animation: duoPan 34s ease-in-out infinite alternate;
     -webkit-mask: var(--duo-mask) center 40% / cover no-repeat;
     mask: var(--duo-mask) center 40% / cover no-repeat;
@@ -231,7 +236,7 @@
   .grain{ will-change: transform; }
 
   @media (prefers-reduced-motion: reduce){
-    .home-stage .duo{ animation:none; transform:scale(1.32); }
+    .home-stage .duo{ animation:none; transform: scale(var(--duo-scale)) translate(0, var(--duo-y)); }
   }
 
   /* ---------- Glitch background (every page) ---------- */
@@ -806,7 +811,7 @@ var GLITCH_CONFIG = {
     stretch: 'expanded',        // Archivo width: 'normal' (100%) | 'semi-expanded' (112.5%) | 'expanded' (125%)
     mobileStack: true,          // on narrow screens the H1 stacks as LA / DIS / TOR / SIÓN…
     mobileBreakpoint: 640,      // …up to this viewport width (px)
-    mobileWidth: 0.78,          // the widest stacked line takes this share of the width (room for the photo)
+    mobileWidth: 0.66,          // the widest stacked line takes this share of the width (room for the photo)
     mobileMaxHeight: 0.45,      // the stacked title never takes more than this share of the screen height
     restSplit: 3,               // rosa ← | → celeste offset at rest
     glowBlur: 22,               // soft halo around the letters
