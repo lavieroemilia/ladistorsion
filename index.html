@@ -307,6 +307,12 @@
   .dossier-cta--hero{ margin-top:0; flex-shrink:0; }
   @media (max-width:640px){
     .page-hero-row{ align-items:flex-start; }
+    /* Phones: every section title sits on the right edge. The hero spans
+       the full width (it used to shrink to the title, which left some
+       titles centred and one on the left). */
+    .view.page > .page-hero{ align-self:stretch; width:100%; }
+    .page-title{ text-align:right; }
+    .page-hero-row .page-title{ flex-basis:100%; }
   }
 
   .section{
