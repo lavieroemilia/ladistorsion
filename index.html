@@ -149,25 +149,6 @@
     to{ transform: scale(1.38) translate(-1%, 0); }
   }
 
-  /* Cursor-reactive chromatic halo — site-wide, viewport-fixed so it keeps
-     tracking the pointer through scroll and page navigation. Colour
-     interpolates fucsia→turquesa by horizontal position in the viewport.
-     Sits behind all text/content (negative z-index within #app's stacking
-     context) and never intercepts clicks. Desktop/hover only. */
-  .cursor-halo{
-    position:fixed; z-index:-1; left:0; top:0;
-    width:clamp(420px, 62vw, 880px); height:clamp(420px, 62vw, 880px);
-    border-radius:50%;
-    background: radial-gradient(circle, var(--hcolor, var(--luz)) 0%, transparent 72%);
-    filter: blur(clamp(55px, 9vw, 130px));
-    mix-blend-mode: screen;
-    opacity:0;
-    transition: opacity .6s ease;
-    pointer-events:none;
-    will-change: transform, opacity;
-  }
-  .cursor-halo.is-active{ opacity:.7; }
-
   .home-scrim{
     position:absolute; inset:0; z-index:1; pointer-events:none;
     background:
@@ -235,16 +216,93 @@
   }
   .grain{ will-change: transform; }
 
-  /* Home halos: the site halo split in two tones. Same look as
-     .cursor-halo; the JS moves them with transforms. */
-  .cursor-halo.duo-halo{ left:0; top:0; transition: opacity .6s ease; }
-  .cursor-halo.duo-halo.luz{ --hcolor: var(--luz); }
-  .cursor-halo.duo-halo.paco{ --hcolor: var(--paco); }
-  .cursor-halo.duo-halo.is-active{ opacity: var(--duo-halo-alpha, .55); }
-
   @media (prefers-reduced-motion: reduce){
     .home-stage .duo{ animation:none; transform:scale(1.32); }
-    .cursor-halo{ display:none; }
+  }
+
+  /* ---------- Glitch details across the site ---------- */
+  /* Topbar: a 200 ms rosa/celeste twitch on hover/focus, on top of the
+     existing underline. Text-shadow + a 1px nudge, played once. */
+  .nav-list a:hover, .nav-list a:focus-visible,
+  a.toptag:hover, a.toptag:focus-visible,
+  .brand:hover, .brand:focus-visible{
+    animation: navGlitch var(--gl-nav-dur, 200ms) steps(1, end) 1;
+  }
+  @keyframes navGlitch{
+    0%  { text-shadow: calc(var(--gl-nav-split, 2px) * -1) 0 var(--luz), var(--gl-nav-split, 2px) 0 var(--paco); transform: translateX(1px); }
+    35% { text-shadow: var(--gl-nav-split, 2px) 0 var(--luz), calc(var(--gl-nav-split, 2px) * -1) 0 var(--paco); transform: translateX(-1px); }
+    70% { text-shadow: -1px 0 var(--luz), 1px 0 var(--paco); transform: none; }
+    100%{ text-shadow: none; transform: none; }
+  }
+
+  /* Section change: for ~180 ms a layer of torn bands and hairlines
+     covers the screen while the leaving/arriving view jitters sideways.
+     Dark bands and thin coloured lines only — no white full-screen
+     flash (WCAG 2.3.1), and it happens once per click. */
+  .route-fx{ position:fixed; inset:0; z-index:60; pointer-events:none; display:none; overflow:hidden; }
+  .route-fx.on{ display:block; }
+  .route-fx i{ position:absolute; display:block; }
+  .route-fx .cut{
+    background: var(--bg);
+    box-shadow: calc(var(--gl-cut-split, 4px) * -1) 0 0 var(--luz), var(--gl-cut-split, 4px) 0 0 var(--paco);
+  }
+  #app.is-routing .view:not([hidden]){ animation: routeJitter var(--gl-route-dur, 180ms) steps(1, end) both; }
+  @keyframes routeJitter{
+    0%  { transform: translateX(-6px); }
+    25% { transform: translateX(5px) skewX(-2deg); }
+    50% { transform: translateX(-3px); }
+    75% { transform: translateX(2px); }
+    100%{ transform: none; }
+  }
+
+  /* Subpage titles: two colour copies (rosa ::before, celeste ::after)
+     sliced into bands that jump around while the title arrives, then
+     vanish — the title settles clean for reading. They are pseudo-
+     elements fed from data-text: not part of the page text (no
+     duplicated heading for search engines or copy/paste), and the
+     empty alt text after "/" keeps screen readers from reading them. */
+  .page-title{ position:relative; }
+  .page-title[data-text]::before,
+  .page-title[data-text]::after{
+    content: attr(data-text);
+    content: attr(data-text) / "";
+    position:absolute; left:0; top:0; width:100%;
+    opacity:0; pointer-events:none; user-select:none; mix-blend-mode:screen;
+  }
+  .page-title[data-text]::before{ color: var(--luz); }
+  .page-title[data-text]::after{ color: var(--paco); }
+  .page-title.is-glitching{ animation: titleJitter var(--gl-title-dur, 520ms) steps(1, end) both; }
+  .page-title.is-glitching::before{ animation: titleSliceLuz var(--gl-title-dur, 520ms) steps(1, end) both; }
+  .page-title.is-glitching::after{ animation: titleSlicePaco var(--gl-title-dur, 520ms) steps(1, end) both; }
+  @keyframes titleJitter{
+    0%  { transform: translateX(4px); }
+    20% { transform: translateX(-3px); }
+    40% { transform: translateX(1px); }
+    60% { transform: none; }
+    100%{ transform: none; }
+  }
+  @keyframes titleSliceLuz{
+    0%  { opacity:1; transform: translateX(calc(var(--gl-title-split, 8px) * -1));  clip-path: inset(10% 0 55% 0); }
+    16% { opacity:1; transform: translateX(calc(var(--gl-title-split, 8px) * .75)); clip-path: inset(50% 0 18% 0); }
+    32% { opacity:1; transform: translateX(calc(var(--gl-title-split, 8px) * -.5)); clip-path: inset(0 0 72% 0); }
+    48% { opacity:1; transform: translateX(calc(var(--gl-title-split, 8px) * .35)); clip-path: inset(64% 0 4% 0); }
+    64% { opacity:1; transform: translateX(calc(var(--gl-title-split, 8px) * -.2)); clip-path: inset(0 0 0 0); }
+    80% { opacity:0; transform: none; clip-path: inset(0 0 0 0); }
+    100%{ opacity:0; transform: none; clip-path: inset(0 0 0 0); }
+  }
+  @keyframes titleSlicePaco{
+    0%  { opacity:1; transform: translateX(var(--gl-title-split, 8px));             clip-path: inset(48% 0 20% 0); }
+    16% { opacity:1; transform: translateX(calc(var(--gl-title-split, 8px) * -.8)); clip-path: inset(6% 0 62% 0); }
+    32% { opacity:1; transform: translateX(calc(var(--gl-title-split, 8px) * .5));  clip-path: inset(58% 0 8% 0); }
+    48% { opacity:1; transform: translateX(calc(var(--gl-title-split, 8px) * -.3)); clip-path: inset(20% 0 46% 0); }
+    64% { opacity:1; transform: translateX(calc(var(--gl-title-split, 8px) * .2));  clip-path: inset(0 0 0 0); }
+    80% { opacity:0; transform: none; clip-path: inset(0 0 0 0); }
+    100%{ opacity:0; transform: none; clip-path: inset(0 0 0 0); }
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .nav-list a, a.toptag, .brand, .page-title, .page-title::before, .page-title::after, #app .view{ animation: none !important; }
+    .route-fx{ display:none !important; }
   }
 
   /* ---------- Subpages ---------- */
@@ -450,10 +508,6 @@
       <a class="toptag" href="#contacto" data-nav data-key="contacto">Contacto</a>
     </div>
   </header>
-
-  <!-- Cursor-reactive halo: lives outside the views so it persists across
-       every page, unaffected by which section is hidden/shown. -->
-  <div class="cursor-halo" id="cursorHalo" aria-hidden="true"></div>
 
   <!-- ============ HOME ============ -->
   <section id="view-home" class="view">
@@ -849,15 +903,21 @@ var GLITCH_CONFIG = {
     noiseLineWidth: [0.3, 1],   // fraction of the view width
     noiseLineAlpha: [0.05, 0.14]
   },
-  /* Home only: the cursor halo splits in two — one fucsia, one celeste —
-     and they drift apart the faster the cursor moves (subpages keep the
-     original single halo). Desktop / hover devices only. */
-  halos: {
-    lag: 0.085,                 // how softly they follow the cursor (0–1 per frame)
-    separationPerSpeed: 140,    // px apart per px/ms of cursor speed
-    maxSeparation: 260,
-    separationSmoothing: 0.08,
-    opacity: 0.55
+  /* Rest of the site: small, coherent touches — never on long text. */
+  nav: {
+    duration: 200,              // micro glitch on hover/focus of the topbar links (ms)
+    split: 2                    // rosa/celeste offset of that micro glitch (px)
+  },
+  transition: {
+    duration: 180,              // glitch flash when changing section (ms); the view swaps halfway
+    bands: [8, 14],             // torn bands across the screen
+    bandHeight: [6, 60],
+    shift: [10, 60],            // how far each band is displaced sideways
+    lines: [4, 8]               // thin rosa/celeste/white hairlines
+  },
+  pageTitle: {
+    duration: 520,              // subpage titles tear in, then settle clean for reading
+    split: 8                    // initial rosa/celeste offset (px), shrinking to 0
   },
   maxDpr: 2                     // canvas resolution cap (retina = 2)
 };
@@ -914,7 +974,9 @@ var GLITCH_CONFIG = {
     if(document.fonts && document.fonts.ready){ document.fonts.ready.then(updateContentX); }
   })();
 
-  window.addEventListener('hashchange', route);
+  /* Section changes go through the glitch transition (instant with
+     reduced motion); the very first render does not. */
+  window.addEventListener('hashchange', function(){ routeFx.run(route); });
   route();
 
   /* "Copiar" button on Contacto: copies the e-mail to the clipboard and
@@ -1221,7 +1283,7 @@ var GLITCH_CONFIG = {
     }
 
     /* ---------- Pointer: speed × proximity → intensity ---------- */
-    var ptr = { x: -1, y: -1, cx: 0, cy: 0, t: 0, vx: 0, vy: 0, dir: 1, has: false };
+    var ptr = { x: -1, y: -1, t: 0, vx: 0, vy: 0, dir: 1, has: false };
     var intensity = 0, targetI = 0;
 
     function pointerAt(clientX, clientY, isStart){
@@ -1233,8 +1295,7 @@ var GLITCH_CONFIG = {
         ptr.vy = ptr.vy * .5 + ((y - ptr.y) / dt) * .5;
         if(Math.abs(ptr.vx) > .05) ptr.dir = ptr.vx > 0 ? 1 : -1;
       }
-      ptr.x = x; ptr.y = y; ptr.cx = clientX; ptr.cy = clientY; ptr.t = now; ptr.has = true;
-      halos.show();
+      ptr.x = x; ptr.y = y; ptr.t = now; ptr.has = true;
       if(!isStart) wake();
     }
 
@@ -1440,48 +1501,6 @@ var GLITCH_CONFIG = {
       return changed || state.noise.length !== before;
     }
 
-    /* ---------- Home halos: one fucsia, one celeste ---------- */
-    var halos = (function(){
-      var H = C.halos, api = { show: function(){}, hide: function(){}, step: function(){} };
-      var canHover = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
-      var app = document.getElementById('app');
-      if(!canHover || reduceMotion || !app) return api;
-
-      var els = ['luz', 'paco'].map(function(tone){
-        var d = document.createElement('div');
-        d.className = 'cursor-halo duo-halo ' + tone;
-        d.setAttribute('aria-hidden', 'true');
-        d.style.setProperty('--duo-halo-alpha', H.opacity);
-        app.insertBefore(d, app.firstChild);
-        return d;
-      });
-      var pos = { x:0, y:0 }, sep = 0, started = false, active = false;
-
-      api.show = function(){
-        if(!started){ pos.x = ptr.cx; pos.y = ptr.cy; started = true; }
-        if(!active){ els.forEach(function(e){ e.classList.add('is-active'); }); active = true; }
-      };
-      api.hide = function(){
-        els.forEach(function(e){ e.classList.remove('is-active'); });
-        active = false; started = false;
-      };
-      /* They trail the cursor together and split apart horizontally with
-         speed: the faster the gesture, the further the two versions drift. */
-      api.step = function(){
-        if(!active) return;
-        pos.x += (ptr.cx - pos.x) * H.lag;
-        pos.y += (ptr.cy - pos.y) * H.lag;
-        var speed = Math.sqrt(ptr.vx * ptr.vx + ptr.vy * ptr.vy);
-        var target = Math.min(H.maxSeparation, speed * H.separationPerSpeed);
-        sep += (target - sep) * H.separationSmoothing;
-        var size = els[0].offsetWidth || 700;
-        els[0].style.transform = 'translate3d(' + (pos.x - sep / 2 - size / 2).toFixed(1) + 'px,' + (pos.y - size / 2).toFixed(1) + 'px,0)';
-        els[1].style.transform = 'translate3d(' + (pos.x + sep / 2 - size / 2).toFixed(1) + 'px,' + (pos.y - size / 2).toFixed(1) + 'px,0)';
-      };
-      document.documentElement.addEventListener('mouseleave', api.hide);
-      return api;
-    })();
-
     /* ---------- Heartbeat ---------- */
     var nextBeat = 0, burstEnd = 0, bursting = false;
     function scheduleBeat(now){ nextBeat = now + range(HB.every); }
@@ -1514,7 +1533,6 @@ var GLITCH_CONFIG = {
       if(bursting) dirty = true;
       if(stepAtmosphere(now)) dirty = true;
       photo.step(intensity);
-      halos.step();
       if(dirty){ draw(); dirty = false; }
       rafId = requestAnimationFrame(tick);
     }
@@ -1542,11 +1560,94 @@ var GLITCH_CONFIG = {
     document.addEventListener('viewchange', function(e){
       homeVisible = e.detail.key === 'home';
       if(homeVisible) needsBuild = true;       // size may have changed while away
-      else halos.hide();
       update();
     });
     document.addEventListener('visibilitychange', update);
     update();
+  })();
+
+  /* ============================================================
+     Site-wide glitch details (phase D): timings from GLITCH_CONFIG are
+     exposed as CSS variables so the CSS keyframes read the same values.
+     ============================================================ */
+  var reduceMotionAll = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  (function(){
+    var C = GLITCH_CONFIG, s = document.documentElement.style;
+    s.setProperty('--gl-nav-dur', C.nav.duration + 'ms');
+    s.setProperty('--gl-nav-split', C.nav.split + 'px');
+    s.setProperty('--gl-route-dur', C.transition.duration + 'ms');
+    s.setProperty('--gl-title-dur', C.pageTitle.duration + 'ms');
+    s.setProperty('--gl-title-split', C.pageTitle.split + 'px');
+  })();
+
+  /* Section transition: a fixed layer of torn bands shown for
+     transition.duration; the view swaps halfway and the bands reshuffle
+     once, so it reads as a two-frame tear rather than a fade. */
+  var routeFx = (function(){
+    var T = GLITCH_CONFIG.transition;
+    var app = document.getElementById('app');
+    var layer = document.createElement('div');
+    layer.className = 'route-fx';
+    layer.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(layer);
+    var busy = false;
+    function rand(a, b){ return a + Math.random() * (b - a); }
+    function range(r){ return rand(r[0], r[1]); }
+    var TONES = ['var(--luz)', 'var(--paco)', 'var(--ink)'];
+
+    function paint(){
+      var html = '', n = Math.round(range(T.bands)), m = Math.round(range(T.lines));
+      for(var i = 0; i < n; i++){
+        var w = rand(30, 100), left = rand(-10, 100 - w * .6);
+        var dx = range(T.shift) * (Math.random() < .5 ? -1 : 1);
+        html += '<i class="cut" style="top:' + rand(0, 100).toFixed(1) + '%;height:' + range(T.bandHeight).toFixed(0) +
+                'px;left:' + left.toFixed(1) + '%;width:' + w.toFixed(1) + '%;transform:translateX(' + dx.toFixed(0) + 'px)"></i>';
+      }
+      for(var j = 0; j < m; j++){
+        html += '<i style="top:' + rand(0, 100).toFixed(1) + '%;height:' + (Math.random() < .5 ? 1 : 2) +
+                'px;left:' + rand(-20, 80).toFixed(1) + '%;width:' + rand(10, 60).toFixed(1) + '%;background:' +
+                TONES[Math.floor(Math.random() * TONES.length)] + ';opacity:.8"></i>';
+      }
+      layer.innerHTML = html;
+    }
+
+    function run(swap){
+      if(reduceMotionAll || busy){ swap(); return; }
+      busy = true;
+      paint();
+      layer.classList.add('on');
+      app.classList.add('is-routing');
+      setTimeout(function(){ swap(); paint(); }, T.duration / 2);
+      setTimeout(function(){
+        layer.classList.remove('on');
+        layer.innerHTML = '';
+        app.classList.remove('is-routing');
+        busy = false;
+      }, T.duration);
+    }
+    return { run: run };
+  })();
+
+  /* Subpage titles: hand the text to the CSS colour copies (data-text)
+     and replay the tear each time a subpage is entered. */
+  (function(){
+    if(reduceMotionAll) return;
+    var D = GLITCH_CONFIG.pageTitle;
+    document.querySelectorAll('.page-title').forEach(function(t){
+      t.setAttribute('data-text', t.textContent);
+    });
+    var timer = null;
+    document.addEventListener('viewchange', function(e){
+      if(e.detail.key === 'home') return;
+      var view = document.getElementById('view-' + e.detail.key);
+      var t = view ? view.querySelector('.page-title') : null;
+      if(!t) return;
+      t.classList.remove('is-glitching');
+      void t.offsetWidth;                      // restart the animation
+      t.classList.add('is-glitching');
+      clearTimeout(timer);
+      timer = setTimeout(function(){ t.classList.remove('is-glitching'); }, D.duration + 50);
+    });
   })();
 
   /* Fit the home title to the full available width (edge to edge, same
@@ -1600,67 +1701,5 @@ var GLITCH_CONFIG = {
     }
   })();
 
-  /* Cursor-reactive chromatic halo, site-wide: follows the pointer with a
-     soft lag and blends from fucsia (left) to turquesa (right) by
-     horizontal position in the viewport. Fixed positioning keeps it
-     working across scroll and page navigation, on every view. Desktop
-     hover only; respects reduced-motion. */
-  var halo = document.getElementById('cursorHalo');
-  var canHover = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
-  var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-  if(halo && canHover && !reduceMotion){
-    var luzRGB = [255, 62, 126];
-    var pacoRGB = [79, 195, 247];
-    var current = { x: 0, y: 0 };
-    var target = { x: 0, y: 0 };
-    var haloSize = halo.offsetWidth || 700;
-    var rafId = null;
-    var started = false;
-
-    function lerp(a, b, t){ return a + (b - a) * t; }
-    function smoothstep(t){ t = Math.min(1, Math.max(0, t)); return t * t * (3 - 2 * t); }
-
-    function measure(){ haloSize = halo.offsetWidth || haloSize; }
-    window.addEventListener('resize', measure);
-
-    function tick(){
-      current.x = lerp(current.x, target.x, 0.085);
-      current.y = lerp(current.y, target.y, 0.085);
-
-      halo.style.left = (current.x - haloSize / 2) + 'px';
-      halo.style.top = (current.y - haloSize / 2) + 'px';
-
-      var vw = window.innerWidth || 1;
-      var t = smoothstep(current.x / vw);
-      var r = Math.round(lerp(luzRGB[0], pacoRGB[0], t));
-      var g = Math.round(lerp(luzRGB[1], pacoRGB[1], t));
-      var b = Math.round(lerp(luzRGB[2], pacoRGB[2], t));
-      halo.style.setProperty('--hcolor', 'rgb(' + r + ',' + g + ',' + b + ')');
-
-      rafId = requestAnimationFrame(tick);
-    }
-
-    window.addEventListener('mousemove', function(e){
-      var x = e.clientX, y = e.clientY;
-      /* On the home the two-tone halos take over (glitch module), so this
-         one hides and its loop stops: only one animation loop at a time. */
-      if(document.body.classList.contains('is-home')){
-        halo.classList.remove('is-active');
-        if(rafId){ cancelAnimationFrame(rafId); rafId = null; }
-        started = false;
-        return;
-      }
-      if(!started){ current.x = x; current.y = y; started = true; }
-      target.x = x; target.y = y;
-      halo.classList.add('is-active');
-      if(!rafId){ rafId = requestAnimationFrame(tick); }
-    });
-
-    document.documentElement.addEventListener('mouseleave', function(){
-      halo.classList.remove('is-active');
-      if(rafId){ cancelAnimationFrame(rafId); rafId = null; }
-    });
-  }
 })();
 </script>
