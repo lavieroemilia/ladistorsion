@@ -940,7 +940,29 @@ var GLITCH_CONFIG = {
       whiteWeight: 0.5          // white dashes at half strength: worst case text contrast 5.7:1, typical 8:1
     },
     blend: 0.06,                // how fast it morphs between presets when changing section (per frame)
-    scanGap: 3
+    scanGap: 3,
+    /* Cursor distortion: intensity comes from cursor speed only (still
+       cursor = calm). A horizontal band at the cursor's height gets
+       denser, brighter dashes pushed in the direction of movement, and
+       loose colour bars spark near the pointer. */
+    cursor: {
+      bandHeight: 130,          // half-height of the distorted band (px)
+      shift: 90,                // sideways push of the dashes inside the band at full intensity
+      boost: 1.6,               // extra opacity inside the band at full intensity (×)
+      streaksPerSecond: 150,    // new fast dashes shot inside the band
+      streakWidth: [10, 240],
+      streakLife: [150, 450],
+      streakSpeed: [300, 1100], // px per second, in the direction of movement
+      streakAlpha: [0.3, 0.8],
+      barsPerSecond: 40,        // loose colour bars near the pointer…
+      barWidth: [20, 160],
+      barHeight: [1, 3],
+      barLife: [100, 300],      // …that fade out in 100–300 ms
+      barSpreadX: 180,
+      barSpreadY: 90,
+      barAlpha: 0.9,
+      pageAlphaCap: 0.3         // on subpages nothing gets brighter than this (text contrast)
+    }
   },
   /* Rest of the site: small, coherent touches — never on long text. */
   nav: {
@@ -1064,10 +1086,43 @@ var GLITCH_CONFIG = {
   var engine = (function(){
     var layers = [], rafId = null, lastT = 0;
     var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var P = GLITCH_CONFIG.pointer;
+
+    /* Shared pointer, in viewport (client) coordinates. Mouse anywhere on
+       the page; on touch screens a dragging finger does the same. vx/vy
+       are smoothed px/ms; i is the speed-only intensity (0–1) used by the
+       background; each title adds its own proximity on top. */
+    var ptr = { x: -1, y: -1, t: 0, vx: 0, vy: 0, dir: 1, has: false, i: 0 };
+    function pointerAt(x, y, isStart){
+      var now = performance.now();
+      if(ptr.has && !isStart){
+        var dt = Math.max(8, now - ptr.t);                  // ms; floor avoids spikes from bunched events
+        ptr.vx = ptr.vx * .5 + ((x - ptr.x) / dt) * .5;
+        ptr.vy = ptr.vy * .5 + ((y - ptr.y) / dt) * .5;
+        if(Math.abs(ptr.vx) > .05) ptr.dir = ptr.vx > 0 ? 1 : -1;
+      }
+      ptr.x = x; ptr.y = y; ptr.t = now; ptr.has = true;
+      if(!isStart) wake();
+    }
+    if(!reduce){
+      window.addEventListener('mousemove', function(e){ pointerAt(e.clientX, e.clientY, false); }, { passive:true });
+      window.addEventListener('touchstart', function(e){ var t = e.touches[0]; if(t) pointerAt(t.clientX, t.clientY, true); }, { passive:true });
+      window.addEventListener('touchmove', function(e){ var t = e.touches[0]; if(t) pointerAt(t.clientX, t.clientY, false); }, { passive:true });
+    }
+    function stepPointer(now){
+      /* Velocity decays on its own: no event means the cursor is still. */
+      if(now - ptr.t > 40){ ptr.vx *= .6; ptr.vy *= .6; }
+      var speed = Math.sqrt(ptr.vx * ptr.vx + ptr.vy * ptr.vy);
+      var target = ptr.has ? Math.min(1, speed / P.speedForMax) : 0;
+      ptr.i += (target - ptr.i) * (target > ptr.i ? P.attack : P.release);
+      if(ptr.i < .002) ptr.i = 0;
+    }
+
     function tick(now){
       rafId = null;
       var dt = lastT ? Math.min(1 / 30, (now - lastT) / 1000) : 1 / 60;
       lastT = now;
+      stepPointer(now);
       var any = false;
       for(var i = 0; i < layers.length; i++){
         if(layers[i].active()){ any = true; layers[i].frame(now, dt); }
@@ -1084,6 +1139,7 @@ var GLITCH_CONFIG = {
       else wake();
     });
     return {
+      ptr: ptr,
       reduce: reduce,
       add: function(layer){ layers.push(layer); wake(); },
       wake: wake
@@ -1119,7 +1175,9 @@ var GLITCH_CONFIG = {
     if(!ctx) return null;
 
     var COL = { luz: GL.token('--luz', '#FF3E7E'), paco: GL.token('--paco', '#4FC3F7'), ink: GL.token('--ink', '#F4EEE8') };
-    var W = 0, H = 0, dashes = [], noiseTile, scanTile, noisePat, scanPat;
+    var K = B.cursor, ptr = engine.ptr;
+    var W = 0, H = 0, dashes = [], streaks = [], bars = [], streakAcc = 0, barAcc = 0;
+    var noiseTile, scanTile, noisePat, scanPat;
     var mix = document.body.classList.contains('is-home') ? 1 : 0;   // 0 = page preset, 1 = home preset
     var target = mix, lastDraw = 0, noiseX = 0, noiseY = 0, frameN = 0;
 
@@ -1181,14 +1239,33 @@ var GLITCH_CONFIG = {
       var count = Math.round(dashes.length * lerp(P.perMegapixel / Hm.perMegapixel, 1, mix));
       var aMin = lerp(P.alpha[0], Hm.alpha[0], mix), aMax = lerp(P.alpha[1], Hm.alpha[1], mix);
       var white = lerp(P.whiteWeight, Hm.whiteWeight, mix);
+      var cap = lerp(K.pageAlphaCap, 1, mix);
+      var I = ptr.i, band = K.bandHeight, py = ptr.y, push = ptr.dir * I * K.shift;
       for(var i = 0; i < count; i++){
         var d = dashes[i], age = now - d.born;
         var env = Math.min(1, age / B.fade, (d.life - age) / B.fade);
         if(env <= 0) continue;
-        ctx.globalAlpha = (aMin + (aMax - aMin) * d.a01) * env * (d.color === COL.ink ? white : 1);
+        var a = (aMin + (aMax - aMin) * d.a01) * env * (d.color === COL.ink ? white : 1), dx = 0;
+        /* Inside the cursor band: pushed along the movement and brighter,
+           strongest at the cursor's height, fading to nothing at the edges. */
+        if(I > 0){
+          var f = 1 - Math.abs(d.y - py) / band;
+          if(f > 0){ f *= f; dx = push * f; a = Math.min(cap, a * (1 + K.boost * I * f)); }
+        }
+        ctx.globalAlpha = a;
         ctx.fillStyle = d.color;
-        ctx.fillRect(d.x, d.y, d.w, d.h);
+        ctx.fillRect(d.x + dx, d.y, d.w, d.h);
       }
+
+      /* Fast streaks and loose bars from the cursor, fading with age. */
+      streaks.forEach(function(s){
+        ctx.globalAlpha = Math.min(cap, s.a * (1 - (now - s.born) / s.life));
+        ctx.fillStyle = s.color; ctx.fillRect(s.x, s.y, s.w, s.h);
+      });
+      bars.forEach(function(b){
+        ctx.globalAlpha = Math.min(cap, K.barAlpha * (1 - (now - b.born) / b.life));
+        ctx.fillStyle = b.color; ctx.fillRect(b.x, b.y, b.w, b.h);
+      });
 
       /* Speckle noise, jumping to a new offset every few frames. */
       ctx.globalAlpha = lerp(P.noiseAlpha, Hm.noiseAlpha, mix);
@@ -1201,6 +1278,38 @@ var GLITCH_CONFIG = {
       ctx.fillStyle = scanPat;
       ctx.fillRect(0, 0, W, H);
       ctx.globalAlpha = 1;
+    }
+
+    /* Gaussian-ish scatter: most things near the centre, a few further out. */
+    function spread(){ return (Math.random() + Math.random() + Math.random() - 1.5) / 1.5; }
+
+    function stepCursor(now, dt){
+      var I = ptr.i;
+      streakAcc += I * K.streaksPerSecond * dt;
+      while(streakAcc >= 1){
+        streakAcc -= 1;
+        streaks.push({
+          x: ptr.x + spread() * W * .35, y: (ptr.y + spread() * K.bandHeight) | 0,
+          w: GL.range(K.streakWidth), h: Math.random() < .8 ? 1 : 2,
+          vx: ptr.dir * GL.range(K.streakSpeed), a: GL.range(K.streakAlpha),
+          color: Math.random() < .5 ? COL.luz : COL.paco,
+          born: now, life: GL.range(K.streakLife)
+        });
+      }
+      barAcc += I * K.barsPerSecond * dt;
+      while(barAcc >= 1){
+        barAcc -= 1;
+        bars.push({
+          x: ptr.x + spread() * K.barSpreadX - 40, y: (ptr.y + spread() * K.barSpreadY) | 0,
+          w: GL.range(K.barWidth), h: Math.round(GL.range(K.barHeight)),
+          color: GL.pick([COL.luz, COL.paco, COL.luz, COL.paco, COL.ink]),
+          born: now, life: GL.range(K.barLife)
+        });
+      }
+      streaks.forEach(function(s){ s.x += s.vx * dt; });
+      streaks = streaks.filter(function(s){ return now - s.born < s.life; });
+      bars = bars.filter(function(b){ return now - b.born < b.life; });
+      return I > 0 || streaks.length > 0 || bars.length > 0;
     }
 
     function step(now, dt){
@@ -1221,7 +1330,9 @@ var GLITCH_CONFIG = {
       active: function(){ return true; },
       frame: function(now, dt){
         step(now, dt);
-        if(now - lastDraw >= 1000 / B.fps - 1){ draw(now); lastDraw = now; }
+        /* 30 fps while calm; every frame while the cursor distorts it. */
+        var busy = stepCursor(now, dt);
+        if(busy || now - lastDraw >= 1000 / B.fps - 1){ draw(now); lastDraw = now; }
       }
     };
     window.addEventListener('resize', function(){ resize(); draw(performance.now()); });
@@ -1501,21 +1612,10 @@ var GLITCH_CONFIG = {
     }
 
     /* ---------- Pointer: speed × proximity → intensity ---------- */
-    var ptr = { x: -1, y: -1, t: 0, vx: 0, vy: 0, dir: 1, has: false };
+    /* The shared pointer (client coordinates = home coordinates: the home
+       fills the viewport and never scrolls). */
+    var ptr = engine.ptr;
     var intensity = 0, targetI = 0;
-
-    function pointerAt(clientX, clientY, isStart){
-      var vr = view.getBoundingClientRect();
-      var x = clientX - vr.left, y = clientY - vr.top, now = performance.now();
-      if(ptr.has && !isStart){
-        var dt = Math.max(8, now - ptr.t);                  // ms; floor avoids spikes from bunched events
-        ptr.vx = ptr.vx * .5 + ((x - ptr.x) / dt) * .5;     // smoothed velocity, px/ms
-        ptr.vy = ptr.vy * .5 + ((y - ptr.y) / dt) * .5;
-        if(Math.abs(ptr.vx) > .05) ptr.dir = ptr.vx > 0 ? 1 : -1;
-      }
-      ptr.x = x; ptr.y = y; ptr.t = now; ptr.has = true;
-      if(!isStart) wake();
-    }
 
     function proximity(){
       if(!buf) return 0;
@@ -1530,8 +1630,6 @@ var GLITCH_CONFIG = {
     var lastShuffle = 0, nextShuffle = 0, barAcc = 0;
 
     function stepPointer(now, dt){
-      /* Velocity decays on its own: if no event arrives, the cursor is still. */
-      if(now - ptr.t > 40){ ptr.vx *= .6; ptr.vy *= .6; }
       var speed = Math.sqrt(ptr.vx * ptr.vx + ptr.vy * ptr.vy);
       targetI = ptr.has ? clamp01(speed / P.speedForMax) * proximity() : 0;
       intensity += (targetI - intensity) * (targetI > intensity ? P.attack : P.release);
@@ -1750,7 +1848,6 @@ var GLITCH_CONFIG = {
       photo.step(intensity);
       if(dirty){ draw(); dirty = false; }
     }
-    function wake(){ if(homeVisible) engine.wake(); }
 
     function update(){
       if(!homeVisible) return;
@@ -1759,15 +1856,6 @@ var GLITCH_CONFIG = {
       dirty = true; engine.wake();
     }
     if(!reduceMotion) engine.add({ active: function(){ return homeVisible; }, frame: tick });
-
-    /* Pointer input: mouse everywhere on the home; on touch screens a
-       finger dragging across the home does the same (touch events fire
-       continuously even though the home never scrolls). */
-    if(!reduceMotion){
-      view.addEventListener('mousemove', function(e){ pointerAt(e.clientX, e.clientY, false); });
-      view.addEventListener('touchstart', function(e){ var t = e.touches[0]; if(t) pointerAt(t.clientX, t.clientY, true); }, { passive:true });
-      view.addEventListener('touchmove', function(e){ var t = e.touches[0]; if(t) pointerAt(t.clientX, t.clientY, false); }, { passive:true });
-    }
 
     h1.addEventListener('titlefit', function(){ needsBuild = true; update(); });
     document.addEventListener('viewchange', function(e){
