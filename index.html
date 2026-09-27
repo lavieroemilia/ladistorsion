@@ -180,6 +180,7 @@
      piece takes its own line — LA / DIS / TOR / SIÓN — so the title can be
      much bigger. aria-label on the h1 keeps it one word for screen readers. */
   .home-title h1 .ln{ display:inline; }
+  .home-title h1.is-stacked{ text-align:left; }
   .home-title h1.is-stacked .ln{ display:block; }
   .home-title h1{ font-stretch: var(--title-stretch, normal); }
 
@@ -805,7 +806,8 @@ var GLITCH_CONFIG = {
     stretch: 'expanded',        // Archivo width: 'normal' (100%) | 'semi-expanded' (112.5%) | 'expanded' (125%)
     mobileStack: true,          // on narrow screens the H1 stacks as LA / DIS / TOR / SIÓN…
     mobileBreakpoint: 640,      // …up to this viewport width (px)
-    mobileMaxHeight: 0.55,      // the stacked title never takes more than this share of the screen height
+    mobileWidth: 0.78,          // the widest stacked line takes this share of the width (room for the photo)
+    mobileMaxHeight: 0.45,      // the stacked title never takes more than this share of the screen height
     restSplit: 3,               // rosa ← | → celeste offset at rest
     glowBlur: 22,               // soft halo around the letters
     glowAlpha: 0.5,
@@ -2093,6 +2095,7 @@ var GLITCH_CONFIG = {
       if(!available || !measured) return;
       var px = (available / measured) * REF;
       if(stacked){
+        px *= T.mobileWidth;
         var lineH = parseFloat(getComputedStyle(h1).lineHeight) / parseFloat(getComputedStyle(h1).fontSize) || .86;
         px = Math.min(px, (view ? view.clientHeight : window.innerHeight) * T.mobileMaxHeight / (parts.length * lineH));
       } else px = Math.min(px, 340);
