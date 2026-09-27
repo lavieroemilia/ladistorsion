@@ -180,13 +180,18 @@
   /* Glitch title overlay — the real h1 stays in the DOM (readable,
      selectable, indexable); a full-view canvas paints its glitched twin
      on top. Only once the canvas has actually drawn does the h1 text go
-     transparent (.fx-on), so if the script fails the plain title shows. */
+     transparent (.gl-hide), so if the script fails the plain title shows. */
   .title-fx{
     position:absolute; inset:0; z-index:2;
     width:100%; height:100%;
     pointer-events:none;
   }
-  #view-home.fx-on .home-title h1 span{ color: transparent; }
+  /* Any heading whose glitched twin is on screen hides its own ink
+     (still in the DOM: selectable, read by screen readers). */
+  .gl-hide{ color: transparent !important; }
+  /* Subpage titles: the canvas bleeds around the heading. */
+  .page-title{ position:relative; }
+  .title-fx-bleed{ position:absolute; pointer-events:none; }
 
   /* Photo reaction (built by JS, only when motion is allowed):
      two tinted silhouettes of the duo behind the photo — the cut-out
@@ -264,53 +269,10 @@
     100%{ transform: none; }
   }
 
-  /* Subpage titles: two colour copies (rosa ::before, celeste ::after)
-     sliced into bands that jump around while the title arrives, then
-     vanish — the title settles clean for reading. They are pseudo-
-     elements fed from data-text: not part of the page text (no
-     duplicated heading for search engines or copy/paste), and the
-     empty alt text after "/" keeps screen readers from reading them. */
-  .page-title{ position:relative; }
-  .page-title[data-text]::before,
-  .page-title[data-text]::after{
-    content: attr(data-text);
-    content: attr(data-text) / "";
-    position:absolute; left:0; top:0; width:100%;
-    opacity:0; pointer-events:none; user-select:none; mix-blend-mode:screen;
-  }
-  .page-title[data-text]::before{ color: var(--luz); }
-  .page-title[data-text]::after{ color: var(--paco); }
-  .page-title.is-glitching{ animation: titleJitter var(--gl-title-dur, 520ms) steps(1, end) both; }
-  .page-title.is-glitching::before{ animation: titleSliceLuz var(--gl-title-dur, 520ms) steps(1, end) both; }
-  .page-title.is-glitching::after{ animation: titleSlicePaco var(--gl-title-dur, 520ms) steps(1, end) both; }
-  @keyframes titleJitter{
-    0%  { transform: translateX(4px); }
-    20% { transform: translateX(-3px); }
-    40% { transform: translateX(1px); }
-    60% { transform: none; }
-    100%{ transform: none; }
-  }
-  @keyframes titleSliceLuz{
-    0%  { opacity:1; transform: translateX(calc(var(--gl-title-split, 8px) * -1));  clip-path: inset(10% 0 55% 0); }
-    16% { opacity:1; transform: translateX(calc(var(--gl-title-split, 8px) * .75)); clip-path: inset(50% 0 18% 0); }
-    32% { opacity:1; transform: translateX(calc(var(--gl-title-split, 8px) * -.5)); clip-path: inset(0 0 72% 0); }
-    48% { opacity:1; transform: translateX(calc(var(--gl-title-split, 8px) * .35)); clip-path: inset(64% 0 4% 0); }
-    64% { opacity:1; transform: translateX(calc(var(--gl-title-split, 8px) * -.2)); clip-path: inset(0 0 0 0); }
-    80% { opacity:0; transform: none; clip-path: inset(0 0 0 0); }
-    100%{ opacity:0; transform: none; clip-path: inset(0 0 0 0); }
-  }
-  @keyframes titleSlicePaco{
-    0%  { opacity:1; transform: translateX(var(--gl-title-split, 8px));             clip-path: inset(48% 0 20% 0); }
-    16% { opacity:1; transform: translateX(calc(var(--gl-title-split, 8px) * -.8)); clip-path: inset(6% 0 62% 0); }
-    32% { opacity:1; transform: translateX(calc(var(--gl-title-split, 8px) * .5));  clip-path: inset(58% 0 8% 0); }
-    48% { opacity:1; transform: translateX(calc(var(--gl-title-split, 8px) * -.3)); clip-path: inset(20% 0 46% 0); }
-    64% { opacity:1; transform: translateX(calc(var(--gl-title-split, 8px) * .2));  clip-path: inset(0 0 0 0); }
-    80% { opacity:0; transform: none; clip-path: inset(0 0 0 0); }
-    100%{ opacity:0; transform: none; clip-path: inset(0 0 0 0); }
-  }
+
 
   @media (prefers-reduced-motion: reduce){
-    .nav-list a, a.toptag, .brand, .page-title, .page-title::before, .page-title::after, #app .view{ animation: none !important; }
+    .nav-list a, a.toptag, .brand, #app .view{ animation: none !important; }
     .route-fx{ display:none !important; }
   }
 
@@ -836,10 +798,12 @@ var GLITCH_CONFIG = {
     restSplit: 3,               // rosa ← | → celeste offset at rest
     glowBlur: 22,               // soft halo around the letters
     glowAlpha: 0.5,
-    restSlices: 2,              // thin bands permanently nudged sideways
+    glowPasses: 1,              // more passes = denser bloom
+    restSlices: [2, 2],         // thin bands permanently nudged sideways
     restSliceHeight: [2, 7],
     restSliceShift: [2, 8],
-    escapeLines: 3,             // hairlines leaving the text sideways
+    escapeLines: [3, 3],        // hairlines leaving the text sideways
+    escapeDashes: 2,            // short dashes riding next to each line
     escapeLineWidth: [1, 2],
     escapeLineReach: [0.03, 0.12], // how far past the text edge (fraction of title width)
     escapeLineAlpha: 0.85
@@ -976,9 +940,10 @@ var GLITCH_CONFIG = {
     shift: [10, 60],            // how far each band is displaced sideways
     lines: [4, 8]               // thin rosa/celeste/white hairlines
   },
+  /* Subpage H2s use the same title effect, scaled to their size: every
+     px value of title / heartbeat / pointer is multiplied by this. */
   pageTitle: {
-    duration: 520,              // subpage titles tear in, then settle clean for reading
-    split: 8                    // initial rosa/celeste offset (px), shrinking to 0
+    scale: 0.38
   },
   maxDpr: 2                     // canvas resolution cap (retina = 2)
 };
@@ -1151,6 +1116,7 @@ var GLITCH_CONFIG = {
     rand: function(a, b){ return a + Math.random() * (b - a); },
     range: function(r){ return r[0] + Math.random() * (r[1] - r[0]); },
     pick: function(arr){ return arr[Math.floor(Math.random() * arr.length)]; },
+    layer: function(w, h){ var c = document.createElement('canvas'); c.width = w; c.height = h; return c; },
     token: function(name, fallback){
       return (getComputedStyle(document.documentElement).getPropertyValue(name) || '').trim() || fallback;
     }
@@ -1345,150 +1311,182 @@ var GLITCH_CONFIG = {
   })();
 
   /* ============================================================
-     Glitch title (home). The h1 keeps the real text; this paints its
-     glitched twin on a canvas that covers the whole home view.
+     GlitchText — the glitched twin of a heading, reusable (home H1 and
+     every subpage H2). The heading keeps its real text in the DOM
+     (readable, selectable, indexable); a canvas paints the glitched
+     version on top and the real text turns transparent only once the
+     canvas has drawn.
 
-     How it stays cheap: the title is rasterised ONCE per fit/resize
-     into three offscreen buffers (white core, fucsia, celeste) plus a
-     pre-blurred glow. Each frame only slices those buffers into
-     horizontal bands and copies them with drawImage — no text layout,
-     no filters per frame. One requestAnimationFrame loop drives the
-     title, the loose bars and the photo, and it only runs while the
-     home is visible and the tab is active; when nothing moves it keeps
-     ticking but skips drawing.
+     How it stays cheap: the text is rasterised ONCE per size into three
+     offscreen buffers (white core, fucsia, celeste) plus a pre-blurred
+     glow. Each frame only slices those buffers into horizontal bands and
+     copies them with drawImage — no text layout, no filters per frame.
+
+     Options:
+       textEl   element whose text node is drawn (h1 span / the h2 itself)
+       fontEl   element whose computed font is used (defaults to textEl)
+       host     where the canvas goes; cover:true = canvas fills the host
+                (home), otherwise it bleeds around the host (H2s)
+       before   insert the canvas before this child of host
+       scale    size of the effect vs. GLITCH_CONFIG (1 = H1)
+       bars     loose bars around the cursor (home only)
+       underlay { step(now) → changed, draw(ctx, dpr) } painted under the text
+       onBuild  callback(width, height, dpr) after each rebuild
      ============================================================ */
-  (function(){
-    var C = GLITCH_CONFIG, P = C.pointer, HB = C.heartbeat;
-    var view = document.getElementById('view-home');
-    var h1 = view ? view.querySelector('.home-title h1') : null;
-    var span = h1 ? h1.querySelector('span') : null;
-    if(!view || !h1 || !span) return;
+  function GlitchText(o){
+    var C = GLITCH_CONFIG, P = C.pointer, HB = C.heartbeat, T = C.title;
+    var k = o.scale || 1;
+    function S(v){ return v * k; }                                   // scale a px value
+    function SR(r, min){ return [Math.max(min || 0, r[0] * k), Math.max(min || 0, r[1] * k)]; }
+    var textEl = o.textEl, fontEl = o.fontEl || o.textEl;
 
     var canvas = document.createElement('canvas');
-    canvas.className = 'title-fx';
+    canvas.className = o.cover ? 'title-fx' : 'title-fx-bleed';
     canvas.setAttribute('aria-hidden', 'true');
     var ctx = canvas.getContext('2d');
-    if(!ctx) return;
-    view.insertBefore(canvas, view.querySelector('.home-content'));
+    if(!ctx) return null;
+    o.host.insertBefore(canvas, o.before || null);
 
-    var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    var A = C.atmosphere;
-
-    /* Scanlines: a static CSS layer, so they stay even with reduced motion. */
-    var scan = document.createElement('div');
-    scan.className = 'scanlines';
-    scan.setAttribute('aria-hidden', 'true');
-    scan.style.setProperty('--scan-alpha', A.scanlineAlpha);
-    scan.style.setProperty('--scan-gap', A.scanlineGap + 'px');
-    view.insertBefore(scan, view.querySelector('.home-content'));
-    var grain = view.querySelector('.grain');
-
-    /* Width axis: canvas can only draw Archivo expanded where
-       ctx.fontStretch exists. Where it does not, fall back to normal
-       width for BOTH the h1 and the canvas so they never disagree. */
-    var STRETCH_PCT = { 'normal':'100%', 'semi-expanded':'112.5%', 'expanded':'125%' };
-    var stretch = ('fontStretch' in ctx && STRETCH_PCT[C.title.stretch]) ? C.title.stretch : 'normal';
-    h1.style.setProperty('--title-stretch', STRETCH_PCT[stretch]);
-
-    /* Colours come from the design tokens, never hard-coded RGB. */
-    var rootCS = getComputedStyle(document.documentElement);
-    function token(name, fallback){ return (rootCS.getPropertyValue(name) || '').trim() || fallback; }
-    var COL = {
-      ink: token('--ink', '#F4EEE8'), luz: token('--luz', '#FF3E7E'),
-      paco: token('--paco', '#4FC3F7'), bg: token('--bg', '#150F1A')
-    };
-
-    function rand(a, b){ return a + Math.random() * (b - a); }
-    function range(r){ return rand(r[0], r[1]); }
+    var COL = { ink: GL.token('--ink', '#F4EEE8'), luz: GL.token('--luz', '#FF3E7E'), paco: GL.token('--paco', '#4FC3F7') };
+    var rand = GL.rand, range = GL.range, pick = GL.pick;
     function irange(r){ return Math.round(range(r)); }
-    function pick(arr){ return arr[Math.floor(Math.random() * arr.length)]; }
     function signed(r){ return range(r) * (Math.random() < .5 ? -1 : 1); }
     function clamp01(v){ return v < 0 ? 0 : v > 1 ? 1 : v; }
     function smoothstep(t){ t = clamp01(t); return t * t * (3 - 2 * t); }
 
-    var dpr = 1, buf = null;        // offscreen buffers + text box geometry
-    var needsBuild = true;
-
-    /* ---------- Offscreen buffers: built once per size ---------- */
-    function makeLayer(w, h){
-      var c = document.createElement('canvas');
-      c.width = w; c.height = h;
-      return c;
-    }
-    function setFont(c, px){
-      c.font = '900 ' + px + 'px ' + getComputedStyle(h1).fontFamily;
-      if('fontStretch' in c) c.fontStretch = stretch;
-      if('letterSpacing' in c) c.letterSpacing = (-0.015 * px) + 'px';
-      c.textAlign = 'center';
-      c.textBaseline = 'alphabetic';
-    }
-
-    function build(){
-      var vw = view.clientWidth, vh = view.clientHeight;
-      if(!vw || !vh) return false;          // view hidden: try again when shown
-      dpr = Math.min(C.maxDpr, window.devicePixelRatio || 1);
-      canvas.width = Math.round(vw * dpr);
-      canvas.height = Math.round(vh * dpr);
-
-      var size = parseFloat(getComputedStyle(h1).fontSize);
-      var text = span.textContent;
-      var px = size * dpr;
-      var pad = Math.ceil((C.title.glowBlur * 2 + C.heartbeat.split + 4) * dpr);
-
-      setFont(ctx, px);
-      var m = ctx.measureText(text);
-      var asc = Math.ceil(m.actualBoundingBoxAscent), desc = Math.ceil(m.actualBoundingBoxDescent);
-      var w = Math.ceil(m.width) + pad * 2, hgt = asc + desc + pad * 2;
-      var cx = w / 2, base = pad + asc;
-
-      function textLayer(color){
-        var c = makeLayer(w, hgt), x = c.getContext('2d');
-        setFont(x, px); x.fillStyle = color; x.fillText(text, cx, base);
-        return c;
-      }
-      /* Glow: shadow-only trick (text drawn off-canvas, its shadow shifted
-         back in) — works everywhere, unlike ctx.filter. */
-      var glow = makeLayer(w, hgt), g = glow.getContext('2d');
-      setFont(g, px);
-      var OFF = w * 4, s = C.title.restSplit * dpr * 2;
-      g.shadowBlur = C.title.glowBlur * dpr;
-      g.shadowOffsetX = OFF;
-      g.shadowColor = COL.luz;  g.fillText(text, cx - OFF - s, base);
-      g.shadowColor = COL.paco; g.fillText(text, cx - OFF + s, base);
-
-      /* Where the text sits: align the canvas baseline with the DOM one.
-         An inline span's box is the font's ascent+descent, so its top plus
-         the font ascent is exactly the baseline the browser uses. */
-      var vr = view.getBoundingClientRect(), sr = span.getBoundingClientRect();
-      var domBaseline = (sr.top - vr.top) + m.fontBoundingBoxAscent / dpr;
-      var centerX = (sr.left - vr.left) + sr.width / 2;
-
-      buf = {
-        white: textLayer(COL.ink), luz: textLayer(COL.luz), paco: textLayer(COL.paco), glow: glow,
-        w: w, h: hgt,                         // device px
-        x: centerX * dpr - cx,                // device px, top-left inside the canvas
-        y: domBaseline * dpr - base,
-        textTop: pad, textH: asc + desc,      // device px, the ink area inside the buffer
-        textW: Math.ceil(m.width)
-      };
-      regenRest();
-      makeTiles();
-      photo.build(vw, vh);
-      view.classList.add('fx-on');
-      needsBuild = false;
-      return true;
-    }
-
-    /* ---------- Glitch state ---------- */
+    var ptr = engine.ptr;
+    var dpr = 1, buf = null, font = null, rect = null;
+    var needsBuild = true, dirty = true, kickPending = false;
     var state = {
-      split: C.title.restSplit,   // current colour separation (CSS px)
+      split: S(T.restSplit),      // current colour separation (CSS px)
       rest: [],                   // thin permanent cuts
       burst: [],                  // bands torn by the heartbeat
       tiles: [],                  // bands torn by the pointer (elastic springs)
       lines: [],                  // escaping hairlines + dashes
-      bars: [],                   // loose bars around the cursor
-      noise: []                   // faint lines crossing the whole screen
+      bars: []                    // loose bars around the cursor (home)
     };
+
+    /* ---------- Font + lines, read from the live DOM ---------- */
+    var STRETCH_KEY = { '100%':'normal', '112.5%':'semi-expanded', '125%':'expanded' };
+    function captureFont(){
+      var cs = getComputedStyle(fontEl);
+      font = {
+        size: parseFloat(cs.fontSize), weight: cs.fontWeight, family: cs.fontFamily,
+        stretch: STRETCH_KEY[cs.fontStretch] || 'normal',
+        spacing: parseFloat(cs.letterSpacing) || 0,
+        upper: cs.textTransform === 'uppercase'
+      };
+    }
+    function setFont(c){
+      c.font = font.weight + ' ' + (font.size * dpr) + 'px ' + font.family;
+      if('fontStretch' in c) c.fontStretch = font.stretch;
+      if('letterSpacing' in c) c.letterSpacing = (font.spacing * dpr) + 'px';
+      c.textAlign = 'left';
+      c.textBaseline = 'alphabetic';
+    }
+    /* The heading's rendered lines: one Range per word, grouped by their
+       vertical position. Handles the one-line H1 and H2s that wrap on
+       narrow screens. A text Range's box is the font's ascent+descent,
+       so its top plus the font ascent is the baseline the browser uses. */
+    function readLines(){
+      var node = textEl.firstChild;
+      while(node && node.nodeType !== 3) node = node.nextSibling;
+      if(!node) return [];
+      var str = node.data, r = document.createRange(), lines = [], re = /\S+/g, m;
+      while((m = re.exec(str))){
+        r.setStart(node, m.index); r.setEnd(node, m.index + m[0].length);
+        var b = r.getBoundingClientRect(), last = lines[lines.length - 1];
+        if(last && Math.abs(b.top - last.top) < b.height / 2) last.text = str.slice(last.start, m.index + m[0].length);
+        else lines.push({ start: m.index, text: m[0], left: b.left, top: b.top });
+      }
+      lines.forEach(function(l){ if(font.upper) l.text = l.text.toUpperCase(); });
+      return lines;
+    }
+
+    /* Canvas box. cover: the host's own box. Otherwise it bleeds around
+       the heading (room for glow, shifted bands and escaping lines) but
+       is clamped to the viewport so it never causes sideways scroll. */
+    function placeCanvas(){
+      if(o.cover){
+        var cw = o.host.clientWidth, ch = o.host.clientHeight;
+        return cw && ch ? { w: cw, h: ch } : null;
+      }
+      var hr = o.host.getBoundingClientRect();
+      if(!hr.width) return null;
+      var bx = Math.ceil(hr.width * .2 + S(T.glowBlur * 2 + P.maxShift + P.maxSplit));
+      var by = Math.ceil(hr.height * .3 + S(T.glowBlur * 2) + 8);
+      var vw = document.documentElement.clientWidth;
+      var left = Math.max(-bx, -hr.left), right = Math.min(hr.width + bx, vw - hr.left);
+      canvas.style.left = left + 'px';
+      canvas.style.top = -by + 'px';
+      canvas.style.width = (right - left) + 'px';
+      canvas.style.height = (hr.height + 2 * by) + 'px';
+      return { w: right - left, h: hr.height + 2 * by };
+    }
+
+    /* ---------- Offscreen buffers: built once per size ---------- */
+    function build(){
+      var size = placeCanvas();
+      if(!size) return false;                // hidden: try again when shown
+      captureFont();
+      dpr = Math.min(C.maxDpr, window.devicePixelRatio || 1);
+      canvas.width = Math.round(size.w * dpr);
+      canvas.height = Math.round(size.h * dpr);
+      var lines = readLines();
+      if(!lines.length) return false;
+      var cr = canvas.getBoundingClientRect();
+
+      setFont(ctx);
+      var pad = Math.ceil(S(T.glowBlur * 2 + HB.split + 4) * dpr);
+      var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      lines.forEach(function(l){
+        var m = ctx.measureText(l.text);
+        l.x = (l.left - cr.left) * dpr;
+        l.base = (l.top - cr.top) * dpr + m.fontBoundingBoxAscent;
+        minX = Math.min(minX, l.x); maxX = Math.max(maxX, l.x + m.width);
+        minY = Math.min(minY, l.base - m.actualBoundingBoxAscent);
+        maxY = Math.max(maxY, l.base + m.actualBoundingBoxDescent);
+      });
+      var ox = Math.floor(minX) - pad, oy = Math.floor(minY) - pad;
+      var w = Math.ceil(maxX - minX) + pad * 2, hgt = Math.ceil(maxY - minY) + pad * 2;
+
+      function textLayer(color){
+        var c = GL.layer(w, hgt), x = c.getContext('2d');
+        setFont(x); x.fillStyle = color;
+        lines.forEach(function(l){ x.fillText(l.text, l.x - ox, l.base - oy); });
+        return c;
+      }
+      /* Glow: shadow-only trick (text drawn off-canvas, its shadow shifted
+         back in) — works everywhere, unlike ctx.filter. Two passes per
+         tone make it denser, like the bloom in distorsion-3. */
+      var glow = GL.layer(w, hgt), g = glow.getContext('2d');
+      setFont(g);
+      var OFF = w * 4, s = Math.max(1, S(T.restSplit)) * dpr * 2;
+      g.shadowBlur = Math.max(4, S(T.glowBlur)) * dpr;
+      g.shadowOffsetX = OFF;
+      for(var pass = 0; pass < T.glowPasses; pass++){
+        lines.forEach(function(l){
+          g.shadowColor = COL.luz;  g.fillText(l.text, l.x - ox - OFF - s, l.base - oy);
+          g.shadowColor = COL.paco; g.fillText(l.text, l.x - ox - OFF + s, l.base - oy);
+        });
+      }
+
+      buf = {
+        white: textLayer(COL.ink), luz: textLayer(COL.luz), paco: textLayer(COL.paco), glow: glow,
+        w: w, h: hgt,                         // device px
+        x: ox, y: oy,                         // device px, top-left inside the canvas
+        textTop: pad, textH: hgt - pad * 2,   // device px, the ink area inside the buffer
+        textW: w - pad * 2
+      };
+      state.tiles = [];
+      regenRest();
+      makeTiles();
+      if(o.onBuild) o.onBuild(size.w, size.h, dpr);
+      textEl.classList.add('gl-hide');
+      needsBuild = false;
+      dirty = true;
+      return true;
+    }
 
     /* Non-overlapping horizontal bands across the ink area. */
     function makeBands(count, hRange, shiftFn){
@@ -1503,26 +1501,27 @@ var GLITCH_CONFIG = {
     }
 
     function regenRest(){
-      state.rest = makeBands(C.title.restSlices, C.title.restSliceHeight, function(){ return signed(C.title.restSliceShift); });
+      state.rest = makeBands(irange(T.restSlices), SR(T.restSliceHeight, 1), function(){ return signed(SR(T.restSliceShift, 1)); });
       state.lines = [];
       var textL = buf.x + (buf.w - buf.textW) / 2, textR = textL + buf.textW;
       var firstLeft = Math.random() < .5;       // alternate sides so the lines balance
-      for(var i = 0; i < C.title.escapeLines; i++){
-        var y = buf.y + buf.textTop + buf.textH * rand(.15, .85);
+      var n = irange(T.escapeLines);
+      for(var i = 0; i < n; i++){
+        var y = buf.y + buf.textTop + buf.textH * rand(.1, .9);
         var left = (i % 2 === 0) === firstLeft;
-        var reach = buf.textW * range(C.title.escapeLineReach);
-        var inside = buf.textW * rand(.05, .3);
+        var reach = buf.textW * range(T.escapeLineReach);
+        var inside = buf.textW * rand(.05, .35);
         var x0 = left ? textL - reach : textR - inside;
         var x1 = left ? textL + inside : textR + reach;
-        var color = pick([COL.luz, COL.paco, COL.ink]);
-        var lw = Math.max(1, Math.round(range(C.title.escapeLineWidth) * dpr));
+        var color = pick([COL.luz, COL.paco, COL.luz, COL.paco, COL.ink]);
+        var lw = Math.max(1, Math.round(range(T.escapeLineWidth) * dpr * Math.max(k, .5)));
         state.lines.push({ x:x0, y:y, w:x1 - x0, h:lw, color:color });
-        /* a couple of short dashes riding next to the line, as in the reference */
-        for(var k = 0; k < 2; k++){
-          var dw = reach * rand(.1, .35);
+        /* short dashes riding next to the line, as in the reference */
+        for(var d = 0; d < T.escapeDashes; d++){
+          var dw = reach * rand(.08, .35);
           state.lines.push({
-            x: left ? x0 - dw * rand(.3, 1.5) : x1 + dw * rand(.1, 1),
-            y: y + rand(-3, 3) * dpr, w: dw, h: lw, color: color
+            x: left ? x0 - dw * rand(.2, 1.8) : x1 + dw * rand(.1, 1.4),
+            y: y + rand(-4, 4) * dpr * k, w: dw, h: lw, color: color
           });
         }
       }
@@ -1538,8 +1537,9 @@ var GLITCH_CONFIG = {
     }
     function makeTiles(){
       var old = state.tiles, out = [], y = buf.textTop, end = buf.textTop + buf.textH;
+      var hr = SR(P.stripHeight, 2);
       while(y < end){
-        var hh = Math.min(range(P.stripHeight) * dpr, end - y);
+        var hh = Math.min(range(hr) * dpr, end - y);
         var prev = tileAt(old, y + hh / 2);
         out.push({
           y:y, h:hh,
@@ -1582,12 +1582,9 @@ var GLITCH_CONFIG = {
       if(!buf) return;
       var X = buf.x, Y = buf.y, W = buf.w, sp = state.split * dpr;
 
-      state.noise.forEach(function(n){
-        ctx.globalAlpha = n.alpha; ctx.fillStyle = n.color;
-        ctx.fillRect(n.x * dpr, n.y * dpr, n.w * dpr, Math.max(1, Math.round(dpr)));
-      });
+      if(o.underlay) o.underlay.draw(ctx, dpr);
 
-      ctx.globalAlpha = C.title.glowAlpha;
+      ctx.globalAlpha = T.glowAlpha;
       ctx.drawImage(buf.glow, X, Y);
       ctx.globalAlpha = 1;
 
@@ -1603,7 +1600,7 @@ var GLITCH_CONFIG = {
         ctx.setTransform(1, 0, 0, 1, 0, 0);
       });
 
-      ctx.globalAlpha = C.title.escapeLineAlpha;
+      ctx.globalAlpha = T.escapeLineAlpha;
       state.lines.forEach(function(l){ ctx.fillStyle = l.color; ctx.fillRect(l.x, l.y, l.w, l.h); });
 
       ctx.globalAlpha = C.bars.alpha;
@@ -1612,71 +1609,178 @@ var GLITCH_CONFIG = {
     }
 
     /* ---------- Pointer: speed × proximity → intensity ---------- */
-    /* The shared pointer (client coordinates = home coordinates: the home
-       fills the viewport and never scrolls). */
-    var ptr = engine.ptr;
-    var intensity = 0, targetI = 0;
+    var intensity = 0, nextShuffle = 0, barAcc = 0;
 
     function proximity(){
-      if(!buf) return 0;
-      var tl = (buf.x + (buf.w - buf.textW) / 2) / dpr, tr = tl + buf.textW / dpr;
-      var tt = (buf.y + buf.textTop) / dpr, tb = tt + buf.textH / dpr;
+      var tl = rect.left + (buf.x + (buf.w - buf.textW) / 2) / dpr, tr = tl + buf.textW / dpr;
+      var tt = rect.top + (buf.y + buf.textTop) / dpr, tb = tt + buf.textH / dpr;
       var dx = Math.max(tl - ptr.x, 0, ptr.x - tr), dy = Math.max(tt - ptr.y, 0, ptr.y - tb);
-      var dist = Math.sqrt(dx * dx + dy * dy);
-      var p = 1 - smoothstep(dist / (P.proximityRange * view.clientHeight));
+      var p = 1 - smoothstep(Math.sqrt(dx * dx + dy * dy) / (P.proximityRange * window.innerHeight));
       return P.proximityFloor + (1 - P.proximityFloor) * p;
     }
 
-    var lastShuffle = 0, nextShuffle = 0, barAcc = 0;
-
     function stepPointer(now, dt){
       var speed = Math.sqrt(ptr.vx * ptr.vx + ptr.vy * ptr.vy);
-      targetI = ptr.has ? clamp01(speed / P.speedForMax) * proximity() : 0;
+      var targetI = ptr.has ? clamp01(speed / P.speedForMax) * proximity() : 0;
       intensity += (targetI - intensity) * (targetI > intensity ? P.attack : P.release);
       if(intensity < .002) intensity = 0;
 
       /* New band layout from time to time while the tear is active. */
       if(intensity > .15 && now >= nextShuffle){
         makeTiles();
-        lastShuffle = now; nextShuffle = now + range(P.reshuffleEvery);
+        nextShuffle = now + range(P.reshuffleEvery);
       }
 
       /* Springs: each band chases its target shift/lean; when the cursor
          stops the targets drop to 0 and the bands snap back elastically. */
-      var cyBuf = ptr.y * dpr - buf.y, fall = P.falloff * buf.textH;
-      var k = P.stiffness, c = P.damping, moving = false;
+      var cyBuf = (ptr.y - rect.top) * dpr - buf.y, fall = P.falloff * buf.textH;
+      var ks = P.stiffness, c = P.damping, moving = false, maxShift = S(P.maxShift) * dpr;
       state.tiles.forEach(function(t){
         var d = (t.y + t.h / 2 - cyBuf) / fall;
         var near = P.nearFloor + (1 - P.nearFloor) * Math.exp(-d * d);
-        var tx = ptr.dir * intensity * P.maxShift * dpr * near * t.weight;
+        var tx = ptr.dir * intensity * maxShift * near * t.weight;
         var tsk = t.lean * intensity * P.maxSkew * near;
-        t.v += (k * (tx - t.x) - c * t.v) * dt;  t.x += t.v * dt;
-        t.skv += (k * (tsk - t.sk) - c * t.skv) * dt;  t.sk += t.skv * dt;
+        t.v += (ks * (tx - t.x) - c * t.v) * dt;  t.x += t.v * dt;
+        t.skv += (ks * (tsk - t.sk) - c * t.skv) * dt;  t.sk += t.skv * dt;
         if(Math.abs(t.x) > .05 || Math.abs(t.v) > .5 || Math.abs(t.sk) > .0005) moving = true;
         else { t.x = 0; t.v = 0; t.sk = 0; t.skv = 0; }
       });
 
       /* Colour split widens with intensity (heartbeat can widen it too). */
-      var split = C.title.restSplit + (P.maxSplit - C.title.restSplit) * intensity;
-      state.split = bursting ? Math.max(split, HB.split) : split;
+      var rs = Math.max(1, S(T.restSplit));
+      var split = rs + (S(P.maxSplit) - rs) * intensity;
+      state.split = bursting ? Math.max(split, S(HB.split)) : split;
 
-      /* Loose bars near the cursor, spawned in proportion to intensity. */
-      barAcc += intensity * C.bars.perSecond * dt;
-      while(barAcc >= 1){
-        barAcc -= 1;
-        if(state.bars.length >= C.bars.max) continue;
-        state.bars.push({
-          x: ptr.x + rand(-1, 1) * C.bars.spreadX - rand(0, 1) * 80,
-          y: ptr.y + rand(-1, 1) * C.bars.spreadY,
-          w: range(C.bars.width), h: range(C.bars.height),
-          color: pick([COL.luz, COL.paco, COL.ink]),
-          die: now + range(C.bars.life)
-        });
+      /* Loose bars near the cursor (home), spawned in proportion to intensity. */
+      if(o.bars){
+        barAcc += intensity * C.bars.perSecond * dt;
+        while(barAcc >= 1){
+          barAcc -= 1;
+          if(state.bars.length >= C.bars.max) continue;
+          state.bars.push({
+            x: ptr.x - rect.left + rand(-1, 1) * C.bars.spreadX - rand(0, 1) * 80,
+            y: ptr.y - rect.top + rand(-1, 1) * C.bars.spreadY,
+            w: range(C.bars.width), h: range(C.bars.height),
+            color: pick([COL.luz, COL.paco, COL.ink]),
+            die: now + range(C.bars.life)
+          });
+        }
+        state.bars = state.bars.filter(function(b){ return b.die > now; });
       }
-      state.bars = state.bars.filter(function(b){ return b.die > now; });
-
       return moving || intensity > 0 || state.bars.length > 0;
     }
+
+    /* ---------- Heartbeat ---------- */
+    var nextBeat = 0, burstEnd = 0, bursting = false;
+    function scheduleBeat(now){ nextBeat = now + range(HB.every); }
+    function startBurst(now){
+      bursting = true;
+      burstEnd = now + range(HB.duration);
+      state.burst = makeBands(irange(HB.strips), SR(HB.stripHeight, 2), function(){ return signed(SR(HB.shift, 2)); });
+    }
+    function endBurst(now){
+      bursting = false;
+      state.burst = [];
+      regenRest();                 // the resting cuts shift a little after every beat
+      scheduleBeat(now);
+    }
+
+    /* ---------- One frame (called by the shared engine) ---------- */
+    function frame(now, dt){
+      if(needsBuild && !build()) return;
+      rect = canvas.getBoundingClientRect();
+      if(!nextBeat) scheduleBeat(now);
+      if(kickPending){ kickPending = false; startBurst(now); dirty = true; }
+      /* Skip a beat while the pointer is already tearing the title. */
+      if(!bursting && now >= nextBeat){
+        if(intensity > .1) scheduleBeat(now); else { startBurst(now); dirty = true; }
+      } else if(bursting && now >= burstEnd){ endBurst(now); dirty = true; }
+
+      if(stepPointer(now, dt)) dirty = true;
+      if(bursting) dirty = true;
+      if(o.underlay && o.underlay.step(now)) dirty = true;
+      if(dirty){ draw(); dirty = false; }
+    }
+
+    function invalidate(){ needsBuild = true; dirty = true; }
+    window.addEventListener('resize', invalidate);
+    if(document.fonts && document.fonts.ready) document.fonts.ready.then(invalidate);
+
+    return {
+      frame: frame,
+      invalidate: invalidate,
+      /* Reduced motion: one static frame (colour split, cuts, lines). */
+      renderStatic: function(){ if(needsBuild && !build()) return; draw(); },
+      /* Play a burst right away (a subpage title arriving). */
+      kick: function(){ kickPending = true; },
+      intensity: function(){ return intensity; }
+    };
+  }
+
+  /* ============================================================
+     Home: the H1 through GlitchText, plus what only the home has —
+     scanlines, breathing grain, faint noise lines and the photo's
+     reaction (coloured ghosts + slipping bands).
+     ============================================================ */
+  (function(){
+    var C = GLITCH_CONFIG, A = C.atmosphere;
+    var view = document.getElementById('view-home');
+    var h1 = view ? view.querySelector('.home-title h1') : null;
+    var span = h1 ? h1.querySelector('span') : null;
+    if(!view || !h1 || !span) return;
+    var reduceMotion = engine.reduce;
+    var rand = GL.rand, range = GL.range, pick = GL.pick;
+    var COL = { ink: GL.token('--ink', '#F4EEE8'), luz: GL.token('--luz', '#FF3E7E'), paco: GL.token('--paco', '#4FC3F7') };
+
+    /* Width axis: canvas can only draw Archivo expanded where
+       ctx.fontStretch exists. Where it does not, fall back to normal
+       width for BOTH the h1 and the canvas so they never disagree. */
+    var STRETCH_PCT = { 'normal':'100%', 'semi-expanded':'112.5%', 'expanded':'125%' };
+    var probe = document.createElement('canvas').getContext('2d');
+    var stretch = (probe && 'fontStretch' in probe && STRETCH_PCT[C.title.stretch]) ? C.title.stretch : 'normal';
+    h1.style.setProperty('--title-stretch', STRETCH_PCT[stretch]);
+
+    /* Scanlines: a static CSS layer, so they stay even with reduced motion. */
+    var scan = document.createElement('div');
+    scan.className = 'scanlines';
+    scan.setAttribute('aria-hidden', 'true');
+    scan.style.setProperty('--scan-alpha', A.scanlineAlpha);
+    scan.style.setProperty('--scan-gap', A.scanlineGap + 'px');
+    view.insertBefore(scan, view.querySelector('.home-content'));
+    var grain = view.querySelector('.grain');
+
+    /* Faint noise lines crossing the screen now and then, painted under
+       the title on its canvas. Very low alpha: texture, never a flash. */
+    var noise = [], nextNoise = 0;
+    var underlay = {
+      step: function(now){
+        var changed = false, vw = view.clientWidth, vh = view.clientHeight;
+        if(!nextNoise) nextNoise = now + range(A.noiseLineEvery);
+        if(now >= nextNoise){
+          var n = Math.round(range(A.noiseLineCount));
+          for(var i = 0; i < n; i++){
+            var w = range(A.noiseLineWidth) * vw;
+            noise.push({
+              x: rand(-.1, 1) * vw - w / 2, y: rand(0, vh), w: w,
+              alpha: range(A.noiseLineAlpha), color: pick([COL.ink, COL.luz, COL.paco]),
+              die: now + range(A.noiseLineLife)
+            });
+          }
+          nextNoise = now + range(A.noiseLineEvery);
+          changed = true;
+        }
+        var before = noise.length;
+        noise = noise.filter(function(l){ return l.die > now; });
+        return changed || noise.length !== before;
+      },
+      draw: function(ctx, dpr){
+        noise.forEach(function(n){
+          ctx.globalAlpha = n.alpha; ctx.fillStyle = n.color;
+          ctx.fillRect(n.x * dpr, n.y * dpr, n.w * dpr, Math.max(1, Math.round(dpr)));
+        });
+        ctx.globalAlpha = 1;
+      }
+    };
 
     /* ---------- Background photo: ghosts + slipping bands ---------- */
     var photo = (function(){
@@ -1699,16 +1803,13 @@ var GLITCH_CONFIG = {
         return outer;
       });
       /* Keep the ghosts' slow pan in step with the photo's own pan. */
-      function syncPan(){
-        if(!duo.getAnimations) return;
+      if(duo.getAnimations){
         var a = duo.getAnimations()[0];
-        if(!a) return;
-        ghosts.forEach(function(g){
+        if(a) ghosts.forEach(function(g){
           var ga = g.querySelector('.duo-ghost-in').getAnimations()[0];
           if(ga) ga.currentTime = a.currentTime;
         });
       }
-      syncPan();
 
       /* Slipping bands: a small canvas above the photo (below the scrim)
          that repaints a few horizontal bands of a pre-blurred copy of the
@@ -1721,15 +1822,15 @@ var GLITCH_CONFIG = {
       var px = pc.getContext('2d');
       var small = null, pvw = 0, pvh = 0, pdpr = 1, bands = [], pI = 0, painted = false;
 
-      api.build = function(vw, vh){
+      api.build = function(vw, vh, dpr){
         pvw = vw; pvh = vh; pdpr = dpr;
         pc.width = Math.round(vw * pdpr); pc.height = Math.round(vh * pdpr);
-        if(!img.complete || !img.naturalWidth){ img.addEventListener('load', function(){ needsBuild = true; }, { once:true }); return; }
+        if(!img.complete || !img.naturalWidth){ img.addEventListener('load', function(){ title.invalidate(); }, { once:true }); return; }
         /* Blur by down-sampling (same look as the CSS blur, no ctx.filter
            needed): object-fit:cover + object-position:center 40%. */
         var blurPx = Math.max(5, Math.min(14, vw * .01));
         var scale = 1 / (blurPx * 1.2);
-        small = makeLayer(Math.max(2, Math.round(vw * scale)), Math.max(2, Math.round(vh * scale)));
+        small = GL.layer(Math.max(2, Math.round(vw * scale)), Math.max(2, Math.round(vh * scale)));
         var s = small.getContext('2d'), iw = img.naturalWidth, ih = img.naturalHeight;
         var cs = Math.max(vw / iw, vh / ih), dw = iw * cs, dh = ih * cs;
         s.imageSmoothingQuality = 'high';
@@ -1740,7 +1841,7 @@ var GLITCH_CONFIG = {
 
       function newBands(){
         bands = [];
-        var n = irange(C.photo.bands);
+        var n = Math.round(range(C.photo.bands));
         for(var i = 0; i < n; i++){
           bands.push({ y: rand(.05, .95) * pvh, h: range(C.photo.bandHeight), w: rand(.4, 1) * (Math.random() < .5 ? -1 : 1) });
         }
@@ -1786,85 +1887,66 @@ var GLITCH_CONFIG = {
       return api;
     })();
 
-    /* ---------- Atmosphere: breathing grain + noise lines ---------- */
-    var frame = 0, nextNoise = 0;
-    function stepAtmosphere(now){
-      /* Grain: jump to a new random offset every few frames, like film
-         grain. Transform only, so it never triggers layout or repaint. */
-      if(grain && ++frame % A.grainEveryFrames === 0){
+    var title = GlitchText({
+      textEl: span, fontEl: h1, host: view, before: view.querySelector('.home-content'),
+      cover: true, scale: 1, bars: true, underlay: underlay,
+      onBuild: function(w, h, dpr){ photo.build(w, h, dpr); }
+    });
+    if(!title) return;
+
+    /* Grain: jump to a new random offset every few frames, like film
+       grain. Transform only, so it never triggers layout or repaint. */
+    var frameN = 0;
+    function frame(now, dt){
+      title.frame(now, dt);
+      if(grain && ++frameN % A.grainEveryFrames === 0){
         grain.style.transform = 'translate3d(' + rand(-A.grainJitter, A.grainJitter).toFixed(1) + 'px,' +
                                                  rand(-A.grainJitter, A.grainJitter).toFixed(1) + 'px,0)';
       }
-      /* Noise lines: now and then 1-3 hairlines cross the screen for a
-         blink. Very low alpha, so they are texture, never a flash. */
-      var changed = false, vw = view.clientWidth, vh = view.clientHeight;
-      if(!nextNoise) nextNoise = now + range(A.noiseLineEvery);
-      if(now >= nextNoise){
-        var n = irange(A.noiseLineCount);
-        for(var i = 0; i < n; i++){
-          var w = range(A.noiseLineWidth) * vw;
-          state.noise.push({
-            x: rand(-.1, 1) * vw - w / 2, y: rand(0, vh), w: w,
-            alpha: range(A.noiseLineAlpha), color: pick([COL.ink, COL.luz, COL.paco]),
-            die: now + range(A.noiseLineLife)
-          });
-        }
-        nextNoise = now + range(A.noiseLineEvery);
-        changed = true;
-      }
-      var before = state.noise.length;
-      state.noise = state.noise.filter(function(l){ return l.die > now; });
-      return changed || state.noise.length !== before;
+      photo.step(title.intensity());
     }
 
-    /* ---------- Heartbeat ---------- */
-    var nextBeat = 0, burstEnd = 0, bursting = false;
-    function scheduleBeat(now){ nextBeat = now + range(HB.every); }
-    function startBurst(now){
-      bursting = true;
-      burstEnd = now + range(HB.duration);
-      state.burst = makeBands(irange(HB.strips), HB.stripHeight, function(){ return signed(HB.shift); });
-    }
-    function endBurst(now){
-      bursting = false;
-      state.burst = [];
-      regenRest();                 // the resting cuts shift a little after every beat
-      scheduleBeat(now);
-    }
-
-    /* ---------- Frame (driven by the shared glitch engine) ---------- */
-    var homeVisible = !view.hidden, dirty = true;
-    function tick(now, dt){
-      if(needsBuild && !build()) return;
-      if(!nextBeat) scheduleBeat(now);
-      /* Skip a beat while the pointer is already tearing the title. */
-      if(!bursting && now >= nextBeat){
-        if(intensity > .1) scheduleBeat(now); else { startBurst(now); dirty = true; }
-      } else if(bursting && now >= burstEnd){ endBurst(now); dirty = true; }
-
-      if(stepPointer(now, dt)) dirty = true;
-      if(bursting) dirty = true;
-      if(stepAtmosphere(now)) dirty = true;
-      photo.step(intensity);
-      if(dirty){ draw(); dirty = false; }
-    }
-
-    function update(){
-      if(!homeVisible) return;
-      if(needsBuild && build()) dirty = true;
-      if(reduceMotion){ draw(); return; }      // static split, no loop, no heartbeat, no pointer
-      dirty = true; engine.wake();
-    }
-    if(!reduceMotion) engine.add({ active: function(){ return homeVisible; }, frame: tick });
-
-    h1.addEventListener('titlefit', function(){ needsBuild = true; update(); });
+    var homeVisible = !view.hidden;
+    h1.addEventListener('titlefit', function(){
+      title.invalidate();
+      if(reduceMotion && homeVisible) title.renderStatic(); else engine.wake();
+    });
     document.addEventListener('viewchange', function(e){
       homeVisible = e.detail.key === 'home';
-      if(homeVisible) needsBuild = true;       // size may have changed while away
-      update();
+      if(!homeVisible) return;
+      title.invalidate();                       // size may have changed while away
+      if(reduceMotion) title.renderStatic(); else engine.wake();
     });
-    update();
+    if(reduceMotion){ if(homeVisible) title.renderStatic(); }
+    else engine.add({ active: function(){ return homeVisible; }, frame: frame });
   })();
+
+  /* ============================================================
+     Subpage titles (H2 .page-title): the same GlitchText, scaled to
+     their size. Heartbeat and cursor reaction like the home; a burst
+     plays as each one arrives. Only the visible page's title runs.
+     ============================================================ */
+  (function(){
+    var scale = GLITCH_CONFIG.pageTitle.scale;
+    document.querySelectorAll('.page-title').forEach(function(h2){
+      var view = h2.closest('.view');
+      if(!view) return;
+      var fx = GlitchText({ textEl: h2, host: h2, scale: scale });
+      if(!fx) return;
+      var visible = !view.hidden;
+      document.addEventListener('viewchange', function(e){
+        visible = view.id === 'view-' + e.detail.key;
+        if(!visible) return;
+        fx.invalidate();
+        if(engine.reduce) fx.renderStatic();
+        else { fx.kick(); engine.wake(); }
+      });
+      window.addEventListener('resize', function(){ if(engine.reduce && visible) fx.renderStatic(); });
+      if(engine.reduce){ if(visible) fx.renderStatic(); }
+      else engine.add({ active: function(){ return visible; }, frame: fx.frame });
+    });
+  })();
+
 
   /* ============================================================
      Site-wide glitch details (phase D): timings from GLITCH_CONFIG are
@@ -1876,8 +1958,6 @@ var GLITCH_CONFIG = {
     s.setProperty('--gl-nav-dur', C.nav.duration + 'ms');
     s.setProperty('--gl-nav-split', C.nav.split + 'px');
     s.setProperty('--gl-route-dur', C.transition.duration + 'ms');
-    s.setProperty('--gl-title-dur', C.pageTitle.duration + 'ms');
-    s.setProperty('--gl-title-split', C.pageTitle.split + 'px');
   })();
 
   /* Section transition: a fixed layer of torn bands shown for
@@ -1928,27 +2008,6 @@ var GLITCH_CONFIG = {
     return { run: run };
   })();
 
-  /* Subpage titles: hand the text to the CSS colour copies (data-text)
-     and replay the tear each time a subpage is entered. */
-  (function(){
-    if(reduceMotionAll) return;
-    var D = GLITCH_CONFIG.pageTitle;
-    document.querySelectorAll('.page-title').forEach(function(t){
-      t.setAttribute('data-text', t.textContent);
-    });
-    var timer = null;
-    document.addEventListener('viewchange', function(e){
-      if(e.detail.key === 'home') return;
-      var view = document.getElementById('view-' + e.detail.key);
-      var t = view ? view.querySelector('.page-title') : null;
-      if(!t) return;
-      t.classList.remove('is-glitching');
-      void t.offsetWidth;                      // restart the animation
-      t.classList.add('is-glitching');
-      clearTimeout(timer);
-      timer = setTimeout(function(){ t.classList.remove('is-glitching'); }, D.duration + 50);
-    });
-  })();
 
   /* Fit the home title to the full available width (edge to edge, same
      margins as the header) at any viewport size. Measures the text at a
