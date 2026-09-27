@@ -220,6 +220,15 @@
     .home-stage .duo{ animation:none; transform:scale(1.32); }
   }
 
+  /* ---------- Glitch background (every page) ---------- */
+  /* Fixed canvas behind all content (negative z-index: above the body
+     colour, below every view). Built and animated by the glitch engine. */
+  .bg-fx{
+    position:fixed; inset:0; z-index:-1;
+    width:100%; height:100%;
+    pointer-events:none;
+  }
+
   /* ---------- Glitch details across the site ---------- */
   /* Topbar: a 200 ms rosa/celeste twitch on hover/focus, on top of the
      existing underline. Text-shadow + a 1px nudge, played once. */
@@ -903,6 +912,36 @@ var GLITCH_CONFIG = {
     noiseLineWidth: [0.3, 1],   // fraction of the view width
     noiseLineAlpha: [0.05, 0.14]
   },
+  /* Glitch background on every page (ref. distorsion-3): a fixed canvas
+     behind the content with hundreds of short, irregular rosa/celeste
+     dashes that drift and fade in/out, plus speckle noise and scanlines.
+     Two presets: strong on the home, subtle on subpages so reading is
+     never affected (worst case keeps body text above 7:1 contrast). */
+  background: {
+    fps: 30,                    // the background only needs 30 redraws per second
+    life: [1500, 6000],         // each dash lives this long, fading in and out…
+    fade: 450,                  // …over this many ms (no popping, no flashing)
+    drift: [3, 25],             // sideways drift speed (px per second)
+    width: [4, 260],            // dash length, biased towards short
+    longChance: 0.05,           // a few long hairlines…
+    longWidth: [300, 900],      // …of this length
+    home: {
+      perMegapixel: 230,        // dash density
+      alpha: [0.06, 0.4],
+      noiseAlpha: 0.55,
+      scanAlpha: 0.05,
+      whiteWeight: 1
+    },
+    page: {
+      perMegapixel: 110,
+      alpha: [0.03, 0.10],
+      noiseAlpha: 0.18,
+      scanAlpha: 0.025,
+      whiteWeight: 0.5          // white dashes at half strength: worst case text contrast 5.7:1, typical 8:1
+    },
+    blend: 0.06,                // how fast it morphs between presets when changing section (per frame)
+    scanGap: 3
+  },
   /* Rest of the site: small, coherent touches — never on long text. */
   nav: {
     duration: 200,              // micro glitch on hover/focus of the topbar links (ms)
@@ -1014,6 +1053,185 @@ var GLITCH_CONFIG = {
     try{ document.execCommand('copy'); }catch(e){}
     document.body.removeChild(ta);
   }
+
+  /* ============================================================
+     Glitch engine: ONE requestAnimationFrame loop for every glitch
+     layer on the site (background, titles, photo). Each layer registers
+     { active(), frame(now, dt) }. The loop only runs while the tab is
+     visible and at least one layer is active; with reduced motion it
+     never runs — layers paint a single static frame instead.
+     ============================================================ */
+  var engine = (function(){
+    var layers = [], rafId = null, lastT = 0;
+    var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    function tick(now){
+      rafId = null;
+      var dt = lastT ? Math.min(1 / 30, (now - lastT) / 1000) : 1 / 60;
+      lastT = now;
+      var any = false;
+      for(var i = 0; i < layers.length; i++){
+        if(layers[i].active()){ any = true; layers[i].frame(now, dt); }
+      }
+      if(any && !document.hidden) rafId = requestAnimationFrame(tick);
+    }
+    function wake(){
+      if(reduce || document.hidden || rafId) return;
+      lastT = 0;
+      rafId = requestAnimationFrame(tick);
+    }
+    document.addEventListener('visibilitychange', function(){
+      if(document.hidden){ if(rafId){ cancelAnimationFrame(rafId); rafId = null; } }
+      else wake();
+    });
+    return {
+      reduce: reduce,
+      add: function(layer){ layers.push(layer); wake(); },
+      wake: wake
+    };
+  })();
+
+  /* Small helpers shared by the glitch modules. */
+  var GL = {
+    rand: function(a, b){ return a + Math.random() * (b - a); },
+    range: function(r){ return r[0] + Math.random() * (r[1] - r[0]); },
+    pick: function(arr){ return arr[Math.floor(Math.random() * arr.length)]; },
+    token: function(name, fallback){
+      return (getComputedStyle(document.documentElement).getPropertyValue(name) || '').trim() || fallback;
+    }
+  };
+
+  /* ============================================================
+     Glitch background (every page). A fixed canvas behind the content:
+     short rosa/celeste dashes (ref. distorsion-3) that each live a few
+     seconds — fading in, drifting sideways, fading out and respawning
+     elsewhere — so the texture renews itself slowly without ever
+     popping. Speckle noise and scanlines are pre-rendered tiles drawn
+     as patterns. Rendered at 1x resolution and 30 fps: it is a soft
+     texture, sharpness buys nothing here.
+     ============================================================ */
+  var glitchBg = (function(){
+    var B = GLITCH_CONFIG.background;
+    var canvas = document.createElement('canvas');
+    canvas.className = 'bg-fx';
+    canvas.setAttribute('aria-hidden', 'true');
+    document.body.insertBefore(canvas, document.body.firstChild);
+    var ctx = canvas.getContext('2d');
+    if(!ctx) return null;
+
+    var COL = { luz: GL.token('--luz', '#FF3E7E'), paco: GL.token('--paco', '#4FC3F7'), ink: GL.token('--ink', '#F4EEE8') };
+    var W = 0, H = 0, dashes = [], noiseTile, scanTile, noisePat, scanPat;
+    var mix = document.body.classList.contains('is-home') ? 1 : 0;   // 0 = page preset, 1 = home preset
+    var target = mix, lastDraw = 0, noiseX = 0, noiseY = 0, frameN = 0;
+
+    function lerp(a, b, t){ return a + (b - a) * t; }
+
+    /* Speckle tile: tiny 1px-high dashes and dots in the three tones. */
+    function makeNoise(){
+      var c = document.createElement('canvas'); c.width = c.height = 256;
+      var x = c.getContext('2d');
+      for(var i = 0; i < 1100; i++){
+        x.globalAlpha = GL.rand(.12, .6);
+        x.fillStyle = Math.random() < .5 ? COL.luz : COL.paco;
+        x.fillRect(Math.random() * 256 | 0, Math.random() * 256 | 0, Math.random() < .7 ? 1 : (2 + Math.random() * 6 | 0), 1);
+      }
+      return c;
+    }
+    function makeScan(){
+      var c = document.createElement('canvas'); c.width = 4; c.height = B.scanGap;
+      var x = c.getContext('2d'); x.fillStyle = COL.ink; x.fillRect(0, 0, 4, 1);
+      return c;
+    }
+
+    /* One dash. Heights 1–3 px (mostly 1), length biased short, colour
+       rosa or celeste (a little white), random depth a01 used to spread
+       its opacity inside the preset range. */
+    function spawn(d, now, anywhereInLife){
+      var long = Math.random() < B.longChance;
+      d.w = long ? GL.range(B.longWidth) : B.width[0] + Math.pow(Math.random(), 2.2) * (B.width[1] - B.width[0]);
+      d.h = Math.random() < .75 ? 1 : (Math.random() < .8 ? 2 : 3);
+      d.x = GL.rand(-d.w, W);
+      d.y = Math.random() * H | 0;
+      d.vx = GL.range(B.drift) * (Math.random() < .5 ? -1 : 1);
+      d.color = Math.random() < .1 ? COL.ink : (Math.random() < .5 ? COL.luz : COL.paco);
+      d.a01 = long ? Math.random() * .5 : Math.random();
+      d.life = GL.range(B.life);
+      d.born = anywhereInLife ? now - Math.random() * d.life : now;
+      return d;
+    }
+
+    function resize(){
+      W = window.innerWidth; H = window.innerHeight;
+      canvas.width = W; canvas.height = H;
+      var max = Math.ceil(B.home.perMegapixel * W * H / 1e6);
+      var now = performance.now();
+      dashes.length = Math.min(dashes.length, max);
+      while(dashes.length < max) dashes.push(spawn({}, now, true));
+      dashes.forEach(function(d){ if(d.y >= H) spawn(d, now, true); });
+      if(!noiseTile){ noiseTile = makeNoise(); scanTile = makeScan(); }
+      noisePat = ctx.createPattern(noiseTile, 'repeat');
+      scanPat = ctx.createPattern(scanTile, 'repeat');
+    }
+
+    function draw(now){
+      var P = B.page, Hm = B.home;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, W, H);
+
+      /* How many dashes are visible and how strong, blended by preset. */
+      var count = Math.round(dashes.length * lerp(P.perMegapixel / Hm.perMegapixel, 1, mix));
+      var aMin = lerp(P.alpha[0], Hm.alpha[0], mix), aMax = lerp(P.alpha[1], Hm.alpha[1], mix);
+      var white = lerp(P.whiteWeight, Hm.whiteWeight, mix);
+      for(var i = 0; i < count; i++){
+        var d = dashes[i], age = now - d.born;
+        var env = Math.min(1, age / B.fade, (d.life - age) / B.fade);
+        if(env <= 0) continue;
+        ctx.globalAlpha = (aMin + (aMax - aMin) * d.a01) * env * (d.color === COL.ink ? white : 1);
+        ctx.fillStyle = d.color;
+        ctx.fillRect(d.x, d.y, d.w, d.h);
+      }
+
+      /* Speckle noise, jumping to a new offset every few frames. */
+      ctx.globalAlpha = lerp(P.noiseAlpha, Hm.noiseAlpha, mix);
+      ctx.translate(noiseX, noiseY);
+      ctx.fillStyle = noisePat;
+      ctx.fillRect(-noiseX, -noiseY, W, H);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+      ctx.globalAlpha = lerp(P.scanAlpha, Hm.scanAlpha, mix);
+      ctx.fillStyle = scanPat;
+      ctx.fillRect(0, 0, W, H);
+      ctx.globalAlpha = 1;
+    }
+
+    function step(now, dt){
+      mix += (target - mix) * B.blend;
+      if(Math.abs(target - mix) < .002) mix = target;
+      for(var i = 0; i < dashes.length; i++){
+        var d = dashes[i];
+        d.x += d.vx * dt;
+        if(now - d.born > d.life) spawn(d, now, false);   // renew: fade out here, fade in somewhere else
+      }
+      if(++frameN % 4 === 0){ noiseX = Math.random() * 256 | 0; noiseY = Math.random() * 256 | 0; }
+    }
+
+    resize();
+    draw(performance.now());
+
+    var api = {
+      active: function(){ return true; },
+      frame: function(now, dt){
+        step(now, dt);
+        if(now - lastDraw >= 1000 / B.fps - 1){ draw(now); lastDraw = now; }
+      }
+    };
+    window.addEventListener('resize', function(){ resize(); draw(performance.now()); });
+    document.addEventListener('viewchange', function(e){
+      target = e.detail.key === 'home' ? 1 : 0;
+      if(engine.reduce){ mix = target; draw(performance.now()); }
+    });
+    if(!engine.reduce) engine.add(api);
+    return api;
+  })();
 
   /* ============================================================
      Glitch title (home). The h1 keeps the real text; this paints its
@@ -1516,13 +1734,10 @@ var GLITCH_CONFIG = {
       scheduleBeat(now);
     }
 
-    /* ---------- Loop control ---------- */
-    var rafId = null, homeVisible = !view.hidden, dirty = true, lastT = 0;
-    function tick(now){
-      rafId = null;
+    /* ---------- Frame (driven by the shared glitch engine) ---------- */
+    var homeVisible = !view.hidden, dirty = true;
+    function tick(now, dt){
       if(needsBuild && !build()) return;
-      var dt = lastT ? Math.min(1 / 30, (now - lastT) / 1000) : 1 / 60;
-      lastT = now;
       if(!nextBeat) scheduleBeat(now);
       /* Skip a beat while the pointer is already tearing the title. */
       if(!bursting && now >= nextBeat){
@@ -1534,18 +1749,16 @@ var GLITCH_CONFIG = {
       if(stepAtmosphere(now)) dirty = true;
       photo.step(intensity);
       if(dirty){ draw(); dirty = false; }
-      rafId = requestAnimationFrame(tick);
     }
-    function start(){ if(!rafId){ lastT = 0; rafId = requestAnimationFrame(tick); } }
-    function stop(){ if(rafId){ cancelAnimationFrame(rafId); rafId = null; } }
-    function wake(){ if(homeVisible && !document.hidden && !reduceMotion) start(); }
+    function wake(){ if(homeVisible) engine.wake(); }
 
     function update(){
-      if(!homeVisible){ stop(); return; }
+      if(!homeVisible) return;
       if(needsBuild && build()) dirty = true;
       if(reduceMotion){ draw(); return; }      // static split, no loop, no heartbeat, no pointer
-      if(document.hidden) stop(); else { dirty = true; start(); }
+      dirty = true; engine.wake();
     }
+    if(!reduceMotion) engine.add({ active: function(){ return homeVisible; }, frame: tick });
 
     /* Pointer input: mouse everywhere on the home; on touch screens a
        finger dragging across the home does the same (touch events fire
@@ -1562,7 +1775,6 @@ var GLITCH_CONFIG = {
       if(homeVisible) needsBuild = true;       // size may have changed while away
       update();
     });
-    document.addEventListener('visibilitychange', update);
     update();
   })();
 
