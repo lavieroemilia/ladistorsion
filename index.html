@@ -187,7 +187,7 @@
   }
   .home-stage .duo{
     position:absolute; inset:0;
-    filter: blur(clamp(5px, 1vw, 14px)) contrast(1.08);
+    filter: contrast(1.08);
     transform: scale(var(--duo-scale)) translate(0, var(--duo-y));
     animation: duoPan 34s ease-in-out infinite alternate;
   }
@@ -257,15 +257,23 @@
      two tinted silhouettes of the duo behind the photo — the cut-out
      photo is its own mask — that slide apart with the glitch intensity
      (ref. distorsion-2), plus a canvas that slips a few bands of the
-     photo sideways. Same blur and slow pan as the photo itself. */
+     photo sideways. Sharp, same slow pan as the photo itself. The ghosts
+     are always there, a little apart (ref. distorsion-2); the glitch
+     pushes them further out. Each ghost is the photo itself, tinted. */
   .duo-ghost{ position:absolute; inset:0; opacity:0; pointer-events:none; will-change:transform, opacity; }
-  .duo-ghost-blur{ position:absolute; inset:0; filter: blur(clamp(5px, 1vw, 14px)); }
+  .duo-ghost-blur{ position:absolute; inset:0; }
   .duo-ghost-in{
     position:absolute; inset:0;
     transform: scale(var(--duo-scale)) translate(0, var(--duo-y));
     animation: duoPan 34s ease-in-out infinite alternate;
     -webkit-mask: var(--duo-mask) center 40% / cover no-repeat;
     mask: var(--duo-mask) center 40% / cover no-repeat;
+    isolation:isolate;
+  }
+  .duo-ghost-in img{
+    position:absolute; inset:0; width:100%; height:100%;
+    object-fit:cover; object-position:center 40%;
+    mix-blend-mode:luminosity; opacity:.55;
   }
   .duo-ghost.luz .duo-ghost-in{ background: var(--luz); }
   .duo-ghost.paco .duo-ghost-in{ background: var(--paco); }
@@ -498,6 +506,7 @@
   .funcion-card .venue{ margin-top:1rem; color:var(--ink-dim); font-size:.95rem; }
   .funcion-card .address{ margin-top:.5rem; font-size:.82rem; letter-spacing:.02em; }
   .funcion-card .address a{ color:var(--ink-faint); }
+  .funcion-card .btn-ticket{ margin-top:1.5rem; }
   .funcion-card .address a:hover, .funcion-card .address a:focus-visible{ color:var(--ink); text-decoration:underline; text-underline-offset:.25em; text-decoration-thickness:1px; }
 
   footer.page-foot{
@@ -808,15 +817,17 @@
       <div class="funciones-grid">
         <div class="funcion-card">
           <h3 class="funcion-date">Sábado 6 de febrero</h3>
-          <p class="funcion-hour">22:00</p>
+          <p class="funcion-hour">22:15</p>
           <p class="venue">El Umbral de Primavera</p>
           <p class="address"><a href="https://www.google.com/maps/place//data=!4m2!3m1!1s0xd42262b0b1a6121:0x4caacc4d425c1f54?sa=X&ved=1t:8290&ictx=111" target="_blank" rel="noopener">C. de la Primavera, 11, Centro, 28012 Madrid</a></p>
+          <a class="btn-dossier btn-ticket" href="https://entradium.com/es/organizers/el-umbral-de-primavera" target="_blank" rel="noopener">Comprar entrada</a>
         </div>
         <div class="funcion-card">
-          <h3 class="funcion-date">13 de febrero</h3>
-          <p class="funcion-hour">22:00</p>
+          <h3 class="funcion-date">Sábado 13 de febrero</h3>
+          <p class="funcion-hour">22:15</p>
           <p class="venue">El Umbral de Primavera</p>
           <p class="address"><a href="https://www.google.com/maps/place//data=!4m2!3m1!1s0xd42262b0b1a6121:0x4caacc4d425c1f54?sa=X&ved=1t:8290&ictx=111" target="_blank" rel="noopener">C. de la Primavera, 11, Centro, 28012 Madrid</a></p>
+          <a class="btn-dossier btn-ticket" href="https://entradium.com/es/organizers/el-umbral-de-primavera" target="_blank" rel="noopener">Comprar entrada</a>
         </div>
       </div>
     </div>
@@ -934,7 +945,9 @@ var GLITCH_CONFIG = {
      few bands of the photo slip sideways. */
   photo: {
     ghostShift: 38,             // silhouettes' offset at full intensity
-    ghostAlpha: 0.55,
+    ghostAlpha: 0.8,
+    ghostBaseShift: 0.035,      // resting offset, as a fraction of the screen width
+    ghostBaseAlpha: 0.6,        // resting opacity (always visible)
     bands: [5, 9],
     bandHeight: [12, 70],
     shift: 55,
@@ -1927,7 +1940,8 @@ var GLITCH_CONFIG = {
         var outer = document.createElement('div');
         outer.className = 'duo-ghost ' + tone;
         outer.setAttribute('aria-hidden', 'true');
-        outer.innerHTML = '<div class="duo-ghost-blur"><div class="duo-ghost-in"></div></div>';
+        outer.innerHTML = '<div class="duo-ghost-blur"><div class="duo-ghost-in"><img alt=""></div></div>';
+        outer.querySelector('img').src = img.src;
         outer.querySelector('.duo-ghost-in').style.setProperty('--duo-mask', 'url("' + img.src + '")');
         stage.insertBefore(outer, duo);
         return outer;
@@ -1956,10 +1970,9 @@ var GLITCH_CONFIG = {
         pvw = vw; pvh = vh; pdpr = dpr;
         pc.width = Math.round(vw * pdpr); pc.height = Math.round(vh * pdpr);
         if(!img.complete || !img.naturalWidth){ img.addEventListener('load', function(){ title.invalidate(); }, { once:true }); return; }
-        /* Blur by down-sampling (same look as the CSS blur, no ctx.filter
-           needed): object-fit:cover + object-position:center 40%. */
-        var blurPx = Math.max(5, Math.min(14, vw * .01));
-        var scale = 1 / (blurPx * 1.2);
+        /* Sharp copy of the photo at screen size:
+           object-fit:cover + object-position:center 40%. */
+        var scale = pdpr;
         small = GL.layer(Math.max(2, Math.round(vw * scale)), Math.max(2, Math.round(vh * scale)));
         var s = small.getContext('2d'), iw = img.naturalWidth, ih = img.naturalHeight;
         var cs = Math.max(vw / iw, vh / ih), dw = iw * cs, dh = ih * cs;
@@ -1967,7 +1980,19 @@ var GLITCH_CONFIG = {
         if('filter' in s) s.filter = 'contrast(1.08)';          // same grade as the CSS photo
         s.drawImage(img, (vw - dw) * .5 * scale, (vh - dh) * .4 * scale, dw * scale, dh * scale);
         bands = [];
+        baseShift = Math.max(14, vw * C.photo.ghostBaseShift);
+        setGhosts(0);
       };
+
+      /* Resting position of the ghosts, pushed further out by the glitch. */
+      var baseShift = 0;
+      function setGhosts(p){
+        var gx = baseShift + p * C.photo.ghostShift;
+        var ga = C.photo.ghostBaseAlpha + p * (C.photo.ghostAlpha - C.photo.ghostBaseAlpha);
+        ghosts[0].style.transform = 'translate3d(' + (-gx).toFixed(2) + 'px,0,0)';
+        ghosts[1].style.transform = 'translate3d(' + gx.toFixed(2) + 'px,0,0)';
+        ghosts[0].style.opacity = ghosts[1].style.opacity = ga.toFixed(3);
+      }
 
       function newBands(){
         bands = [];
@@ -1980,10 +2005,7 @@ var GLITCH_CONFIG = {
       api.step = function(level){
         pI += (level - pI) * C.photo.smoothing;
         if(pI < .003) pI = 0;
-        var gx = pI * C.photo.ghostShift, ga = pI * C.photo.ghostAlpha;
-        ghosts[0].style.transform = 'translate3d(' + (-gx).toFixed(2) + 'px,0,0)';
-        ghosts[1].style.transform = 'translate3d(' + gx.toFixed(2) + 'px,0,0)';
-        ghosts[0].style.opacity = ghosts[1].style.opacity = ga.toFixed(3);
+        setGhosts(pI);
 
         if(!small) return pI > 0;
         if(pI === 0){
