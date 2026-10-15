@@ -439,7 +439,9 @@
   .grid-2{
     display:grid; grid-template-columns: 200px 1fr; gap:clamp(1.5rem,4vw,3.5rem);
   }
-  @media (max-width:640px){ .grid-2{ grid-template-columns:1fr; gap:1.25rem; } }
+  /* Tablets and phones: the section label sits above its content (one
+     column, capped like the cast), so the text keeps a comfortable width. */
+  @media (max-width:1024px){ .grid-2{ grid-template-columns:1fr; gap:1.25rem; max-width:36rem; } }
 
 
   .prose{ max-width:66ch; }
@@ -587,6 +589,8 @@
     display:flex; justify-content:space-between; gap:1rem; flex-wrap:wrap;
     color:var(--ink-faint); font-size:.72rem; letter-spacing:.04em;
   }
+  footer.page-foot .foot-credit{ color:var(--ink); }
+  footer.page-foot .foot-credit:hover, footer.page-foot .foot-credit:focus-visible{ text-decoration:underline; text-underline-offset:.25em; text-decoration-thickness:1px; }
 
   /* Desktop: every page's title, content and footer share one left/right
      margin with the header itself (--content-x = the nav column's own
@@ -692,7 +696,6 @@
           <dt class="label">Dramaturgia</dt><dd>Lalo Lanusse</dd>
           <dt class="label">Elenco</dt><dd>Natalia Peralta<br>Adrián Pulido<br>Leyre Julián Plaza<br>Joaquín Asensio</dd>
           <dt class="label">Asistencia de dirección</dt><dd><a href="https://www.instagram.com/emilaviero/" target="_blank" rel="noopener">Emilia Laviero</a></dd>
-          <dt class="label">Diseño web</dt><dd><a href="https://emilialaviero.com/" target="_blank" rel="noopener">Emilia Laviero</a></dd>
         </dl>
       </div>
     </div>
@@ -718,7 +721,7 @@
 
     <footer class="page-foot">
       <span>La Distorsión, de Lalo Lanusse</span>
-      <span>Madrid, 2026</span>
+      <span>Diseño web por <a class="foot-credit" href="https://www.emilialaviero.com/" target="_blank" rel="noopener">Emilia Laviero</a></span>
     </footer>
   </section>
 
@@ -867,7 +870,7 @@
 
     <footer class="page-foot">
       <span>La Distorsión, de Lalo Lanusse</span>
-      <span>Madrid, 2026</span>
+      <span>Diseño web por <a class="foot-credit" href="https://www.emilialaviero.com/" target="_blank" rel="noopener">Emilia Laviero</a></span>
     </footer>
   </section>
 
@@ -927,7 +930,7 @@
 
     <footer class="page-foot">
       <span>La Distorsión, de Lalo Lanusse</span>
-      <span>Madrid, 2026</span>
+      <span>Diseño web por <a class="foot-credit" href="https://www.emilialaviero.com/" target="_blank" rel="noopener">Emilia Laviero</a></span>
     </footer>
   </section>
 
@@ -958,7 +961,7 @@
 
     <footer class="page-foot">
       <span>La Distorsión, de Lalo Lanusse</span>
-      <span>Madrid, 2026</span>
+      <span>Diseño web por <a class="foot-credit" href="https://www.emilialaviero.com/" target="_blank" rel="noopener">Emilia Laviero</a></span>
     </footer>
   </section>
 
@@ -981,7 +984,7 @@
 
     <footer class="page-foot">
       <span>La Distorsión, de Lalo Lanusse</span>
-      <span>Madrid, 2026</span>
+      <span>Diseño web por <a class="foot-credit" href="https://www.emilialaviero.com/" target="_blank" rel="noopener">Emilia Laviero</a></span>
     </footer>
   </section>
 
