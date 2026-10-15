@@ -405,7 +405,10 @@
   }
 
   /* ---------- Subpages ---------- */
-  .view.page{ min-height:100dvh; display:flex; flex-direction:column; }
+  /* overflow-x:clip — the glitch canvas around a title may be measured
+     before the scrollbar appears and stick out a few px; never let it
+     cause sideways scroll (clip, unlike hidden, adds no scroll box). */
+  .view.page{ min-height:100dvh; display:flex; flex-direction:column; overflow-x:clip; }
   .view.page[hidden]{ display:none; }
   .page-hero{
     padding: var(--topbar-space) clamp(1.25rem,6vw,3rem) clamp(1.5rem,5vh,2.5rem);
@@ -440,8 +443,8 @@
     display:grid; grid-template-columns: 200px 1fr; gap:clamp(1.5rem,4vw,3.5rem);
   }
   /* Tablets and phones: the section label sits above its content (one
-     column, capped like the cast), so the text keeps a comfortable width. */
-  @media (max-width:1024px){ .grid-2{ grid-template-columns:1fr; gap:1.25rem; max-width:36rem; } }
+     column), so the text keeps a comfortable width. */
+  @media (max-width:1024px){ .grid-2{ grid-template-columns:1fr; gap:1.25rem; } }
 
 
   .prose{ max-width:66ch; }
@@ -518,9 +521,8 @@
   .cast-grid{
     display:grid; grid-template-columns:repeat(2, 1fr); gap:clamp(1.25rem,4vw,3rem);
   }
-  /* Tablets and phones: one column so the bios read comfortably; on
-     tablets the column is capped so photos and lines don't get too wide. */
-  @media (max-width:1024px){ .cast-grid{ grid-template-columns:1fr; gap:3rem; max-width:36rem; } }
+  /* Tablets and phones: one column so the bios read comfortably. */
+  @media (max-width:1024px){ .cast-grid{ grid-template-columns:1fr; gap:3rem; } }
   @media (max-width:640px){ .cast-grid{ gap:2.5rem; } }
   .card h3{ font-size:1.4rem; margin-top:1.5rem; }
   .card .role{ margin-top:.5rem; font-size:.78rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; }
@@ -547,7 +549,7 @@
   /* Direction layout */
   .direction-grid{ display:grid; grid-template-columns:clamp(280px, 25vw, 360px) 1fr; gap:clamp(1.75rem,4vw,3.5rem); }
   /* Tablets and phones: photo first, then the text — like the cast cards. */
-  @media (max-width:1024px){ .direction-grid{ grid-template-columns:1fr; gap:1.5rem; max-width:36rem; } }
+  @media (max-width:1024px){ .direction-grid{ grid-template-columns:1fr; gap:1.5rem; } }
   .contact-list{ margin-top:1.5rem; display:flex; flex-direction:column; gap:.6rem; }
   .contact-list a, .contact-list span{ font-size:.92rem; color:var(--ink-dim); }
   .contact-list a:hover, .contact-list a:focus-visible{ color:var(--ink); text-decoration:underline; text-underline-offset:.25em; text-decoration-thickness:1px; }
@@ -573,8 +575,8 @@
   .assist-note strong{ color:var(--ink-dim); font-weight:600; }
 
   .funciones-grid{ display:grid; grid-template-columns:repeat(2, 1fr); gap:clamp(1.25rem,4vw,3rem); }
-  /* Tablets and phones: one date under the other, same column as the cast. */
-  @media (max-width:1024px){ .funciones-grid{ grid-template-columns:1fr; gap:1.5rem; max-width:36rem; } }
+  /* Tablets and phones: one date under the other. */
+  @media (max-width:1024px){ .funciones-grid{ grid-template-columns:1fr; gap:1.5rem; } }
   .funcion-card{ padding:clamp(1.5rem,3vw,2rem); border:1px solid var(--line); }
   .funcion-card .funcion-date{ font-size:clamp(1.35rem, 2.6vw, 1.7rem); letter-spacing:-0.005em; }
   .funcion-card .funcion-hour{ margin-top:.5rem; font-weight:700; font-size:1rem; letter-spacing:.02em; color:var(--ink); }
@@ -617,6 +619,15 @@
   footer.page-foot{ max-width:none; align-self:stretch; margin-left:0; margin-right:0; padding-left:var(--bar-side-x); padding-right:var(--bar-side-x); }
   :root{ --bar-side-x: clamp(1.25rem, 5vw, 2.75rem); }
   @media (max-width:640px){ :root{ --bar-side-x: clamp(1.25rem, 6vw, 3rem); } }
+  /* Tablets: narrower margins than desktop — page titles and content line
+     up with the brand ("La Distorsión", the nav bar's first column), and
+     the right margin mirrors the left one, so content runs edge to edge
+     between them. */
+  @media (min-width:641px) and (max-width:1024px){
+    .page-hero, .section{ padding-left:var(--bar-side-x); padding-right:var(--bar-side-x); }
+    .view.page > .page-hero{ align-self:stretch; width:100%; }
+    .grid-2 .prose{ max-width:none; }
+  }
 </style>
 
 <div id="app">
