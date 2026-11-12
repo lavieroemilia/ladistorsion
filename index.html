@@ -574,16 +574,18 @@
   .assist-note{ margin-top:2rem; padding-top:1.25rem; border-top:1px solid var(--line); color:var(--ink-faint); font-size:.85rem; }
   .assist-note strong{ color:var(--ink-dim); font-weight:600; }
 
-  .funciones-grid{ display:grid; grid-template-columns:repeat(2, 1fr); gap:clamp(1.25rem,4vw,3rem); }
-  /* Tablets and phones: one date under the other. */
-  @media (max-width:1024px){ .funciones-grid{ grid-template-columns:1fr; gap:1.5rem; } }
-  .funcion-card{ padding:clamp(1.5rem,3vw,2rem); border:1px solid var(--line); }
-  .funcion-card .funcion-date{ font-size:clamp(1.35rem, 2.6vw, 1.7rem); letter-spacing:-0.005em; }
+  .funciones-grid{ display:grid; grid-template-columns:repeat(3, 1fr); gap:clamp(1rem,2vw,1.75rem); }
+  /* Below ~1360px the content column is too narrow for three cards: stack them. */
+  @media (max-width:1360px){ .funciones-grid{ grid-template-columns:1fr; gap:1.5rem; } }
+  .funcion-card{ display:flex; flex-direction:column; align-items:flex-start; padding:clamp(1.5rem,2.4vw,2rem); border:1px solid var(--line); }
+  .funcion-card .funcion-date{ font-size:clamp(1.35rem, 2.2vw, 1.7rem); letter-spacing:-0.005em; line-height:1.15; }
+  .funcion-card .funcion-day{ display:block; margin-bottom:.4rem; font-size:.78rem; font-weight:600; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-faint); }
   .funcion-card .funcion-hour{ margin-top:.5rem; font-weight:700; font-size:1rem; letter-spacing:.02em; color:var(--ink); }
   .funcion-card .venue{ margin-top:1rem; color:var(--ink-dim); font-size:.95rem; }
   .funcion-card .address{ margin-top:.5rem; font-size:.82rem; letter-spacing:.02em; }
   .funcion-card .address a{ color:var(--ink-faint); }
-  .funcion-card .btn-ticket{ margin-top:1.5rem; }
+  .funcion-card .btn-ticket{ margin-top:auto; }
+  .funcion-card .address{ margin-bottom:1.5rem; }
   .funcion-card .address a:hover, .funcion-card .address a:focus-visible{ color:var(--ink); text-decoration:underline; text-underline-offset:.25em; text-decoration-thickness:1px; }
 
   footer.page-foot{
@@ -954,14 +956,21 @@
     <div class="section">
       <div class="funciones-grid">
         <div class="funcion-card">
-          <h3 class="funcion-date">Sábado 6 de febrero</h3>
+          <h3 class="funcion-date"><span class="funcion-day">Sábado</span>6 de febrero</h3>
           <p class="funcion-hour">22:15</p>
           <p class="venue">El Umbral de Primavera</p>
           <p class="address"><a href="https://www.google.com/maps/place//data=!4m2!3m1!1s0xd42262b0b1a6121:0x4caacc4d425c1f54?sa=X&ved=1t:8290&ictx=111" target="_blank" rel="noopener">C. de la Primavera, 11, Centro, 28012 Madrid</a></p>
           <a class="btn-dossier btn-ticket" href="https://entradium.com/es/organizers/el-umbral-de-primavera" target="_blank" rel="noopener">Comprar entradas</a>
         </div>
         <div class="funcion-card">
-          <h3 class="funcion-date">Sábado 13 de febrero</h3>
+          <h3 class="funcion-date"><span class="funcion-day">Sábado</span>13 de febrero</h3>
+          <p class="funcion-hour">22:15</p>
+          <p class="venue">El Umbral de Primavera</p>
+          <p class="address"><a href="https://www.google.com/maps/place//data=!4m2!3m1!1s0xd42262b0b1a6121:0x4caacc4d425c1f54?sa=X&ved=1t:8290&ictx=111" target="_blank" rel="noopener">C. de la Primavera, 11, Centro, 28012 Madrid</a></p>
+          <a class="btn-dossier btn-ticket" href="https://entradium.com/es/organizers/el-umbral-de-primavera" target="_blank" rel="noopener">Comprar entradas</a>
+        </div>
+        <div class="funcion-card">
+          <h3 class="funcion-date"><span class="funcion-day">Sábado</span>20 de febrero</h3>
           <p class="funcion-hour">22:15</p>
           <p class="venue">El Umbral de Primavera</p>
           <p class="address"><a href="https://www.google.com/maps/place//data=!4m2!3m1!1s0xd42262b0b1a6121:0x4caacc4d425c1f54?sa=X&ved=1t:8290&ictx=111" target="_blank" rel="noopener">C. de la Primavera, 11, Centro, 28012 Madrid</a></p>
